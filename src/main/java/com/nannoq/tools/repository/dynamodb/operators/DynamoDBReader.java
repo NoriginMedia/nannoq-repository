@@ -4,8 +4,8 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.nannoq.tools.repository.CacheManager;
-import com.nannoq.tools.repository.RedisUtils;
+import com.nannoq.tools.repository.repository.CacheManager;
+import com.nannoq.tools.repository.repository.RedisUtils;
 import com.nannoq.tools.repository.dynamodb.DynamoDBRepository;
 import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
@@ -30,7 +30,7 @@ import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.nannoq.tools.repository.Repository.MULTIPLE_KEY;
+import static com.nannoq.tools.repository.repository.Repository.MULTIPLE_KEY;
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
 import static java.util.stream.Collectors.toList;
 

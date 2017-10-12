@@ -10,11 +10,11 @@ import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.model.Region;
 import com.fasterxml.jackson.core.Version;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.nannoq.tools.repository.CacheManager;
-import com.nannoq.tools.repository.ETagManager;
-import com.nannoq.tools.repository.RedisUtils;
-import com.nannoq.tools.repository.Repository;
 import com.nannoq.tools.repository.dynamodb.operators.*;
+import com.nannoq.tools.repository.repository.CacheManager;
+import com.nannoq.tools.repository.repository.ETagManager;
+import com.nannoq.tools.repository.repository.RedisUtils;
+import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
@@ -57,7 +57,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     public static final String PAGINATION_INDEX = "PAGINATION_INDEX";
 
-    final Vertx vertx;
+    protected final Vertx vertx;
     private final String COLLECTION;
     private final Class<E> TYPE;
     private String HASH_IDENTIFIER;
@@ -66,7 +66,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     private boolean hasRangeKey;
     private static AmazonDynamoDBAsyncClient DYNAMO_DB_CLIENT;
-    static DynamoDBMapper DYNAMO_DB_MAPPER;
+    protected static DynamoDBMapper DYNAMO_DB_MAPPER;
     private final RedisClient REDIS_CLIENT;
     private static String S3BucketName;
 

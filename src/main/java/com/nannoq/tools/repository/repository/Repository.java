@@ -1,4 +1,4 @@
-package com.nannoq.tools.repository;
+package com.nannoq.tools.repository.repository;
 
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;

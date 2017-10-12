@@ -10,6 +10,7 @@ import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.streams.Pump;
+import io.vertx.ext.web.FileUpload;
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -56,6 +57,34 @@ public interface ImageUploader {
         }, false, contentRes -> {
             if (contentRes.failed()) {
                 logger.error("FAILED Storage for: " + file.getPath(), contentRes.cause());
+
+                fut.fail(contentRes.cause());
+            } else {
+                fut.complete(Boolean.TRUE);
+            }
+        });
+    }
+
+    default void doUpload(Vertx vertx, FileUpload file, Supplier<S3Link> s3LinkSupplier, Future<Boolean> fut) {
+        vertx.<Boolean>executeBlocking(uploadFuture -> {
+            try {
+                File convertedFile = imageToPng(new File(file.uploadedFileName()));
+                S3Link location = s3LinkSupplier.get();
+                location.getAmazonS3Client().putObject(
+                        location.getBucketName(), location.getKey(), convertedFile);
+                convertedFile.delete();
+
+                logger.debug("Content stored for: " + file.uploadedFileName());
+
+                uploadFuture.complete(Boolean.TRUE);
+            } catch (Exception e) {
+                logger.error("Failure in external storage!", e);
+
+                uploadFuture.tryFail(e);
+            }
+        }, false, contentRes -> {
+            if (contentRes.failed()) {
+                logger.error("FAILED Storage for: " + file.uploadedFileName(), contentRes.cause());
 
                 fut.fail(contentRes.cause());
             } else {

@@ -1,4 +1,4 @@
-package com.nannoq.tools.repository;
+package com.nannoq.tools.repository.repository;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;

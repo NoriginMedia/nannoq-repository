@@ -1,7 +1,7 @@
 package com.nannoq.tools.repository.dynamodb.operators;
 
-import com.nannoq.tools.repository.CacheManager;
-import com.nannoq.tools.repository.ETagManager;
+import com.nannoq.tools.repository.repository.CacheManager;
+import com.nannoq.tools.repository.repository.ETagManager;
 import com.nannoq.tools.repository.dynamodb.DynamoDBRepository;
 import com.nannoq.tools.repository.models.*;
 import com.nannoq.tools.repository.utils.AggregateFunction;

@@ -1,6 +1,6 @@
 package com.nannoq.tools.repository.dynamodb.operators;
 
-import com.nannoq.tools.repository.Repository;
+import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.dynamodb.DynamoDBRepository;
 import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
@@ -12,8 +12,8 @@ import io.vertx.core.logging.LoggerFactory;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 
-import static com.nannoq.tools.repository.Repository.INCREMENTATION.ADDITION;
-import static com.nannoq.tools.repository.Repository.INCREMENTATION.SUBTRACTION;
+import static com.nannoq.tools.repository.repository.Repository.INCREMENTATION.ADDITION;
+import static com.nannoq.tools.repository.repository.Repository.INCREMENTATION.SUBTRACTION;
 
 public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBUpdater.class.getSimpleName());

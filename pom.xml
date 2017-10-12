@@ -7,7 +7,7 @@
     <groupId>com.nannoq</groupId>
     <artifactId>repository</artifactId>
     <packaging>jar</packaging>
-    <version>1.0</version>
+    <version>1.0.7</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -173,9 +173,19 @@
         <!-- Caching -->
     </dependencies>
 
-    <build>
-        <finalName>com.nannoq.tools.repository</finalName>
+    <distributionManagement>
+        <repository>
+            <id>atv.releases</id>
+            <url>http://mvn-repo.norigin.tv/nexus/content/repositories/releases</url>
+        </repository>
 
+        <snapshotRepository>
+            <id>atv.snapshots</id>
+            <url>http://mvn-repo.norigin.tv/nexus/content/repositories/rdml</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

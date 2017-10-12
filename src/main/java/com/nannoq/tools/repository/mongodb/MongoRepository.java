@@ -1,7 +1,7 @@
 package com.nannoq.tools.repository.mongodb;
 
-import com.nannoq.tools.repository.RedisUtils;
-import com.nannoq.tools.repository.Repository;
+import com.nannoq.tools.repository.repository.RedisUtils;
+import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.utils.FilterParameter;
@@ -34,13 +34,13 @@ import static java.util.stream.Collectors.toList;
 public class MongoRepository<E extends ETagable & Model> implements Repository<E> {
     private static final Logger logger = LoggerFactory.getLogger(MongoRepository.class.getSimpleName());
 
-    private final String COLLECTION;
-    final Class<E> TYPE;
-    private final String IDENTIFIER;
-    final MongoDataStore MONGO_DATA_STORE;
-    private final RedisClient REDIS_CLIENT;
+    protected final String COLLECTION;
+    protected final Class<E> TYPE;
+    protected final String IDENTIFIER;
+    protected final MongoDataStore MONGO_DATA_STORE;
+    protected final RedisClient REDIS_CLIENT;
 
-    MongoRepository(Vertx vertx, MongoDataStore mongoDataStore, Class<E> type,
+    protected MongoRepository(Vertx vertx, MongoDataStore mongoDataStore, Class<E> type,
                     String collection, String identifier, JsonObject appConfig) {
         this.MONGO_DATA_STORE = mongoDataStore;
         this.TYPE = type;
@@ -89,7 +89,7 @@ public class MongoRepository<E extends ETagable & Model> implements Repository<E
     }
 
     @SuppressWarnings("unchecked")
-    void readIterator(List<E> items, IteratorAsync<E> it,
+    protected void readIterator(List<E> items, IteratorAsync<E> it,
                       int size, Handler<AsyncResult<List<E>>> resultHandler) {
         List<E> finalItems = items != null ? items : new ArrayList<>();
         List<Future> futures = new ArrayList<>();

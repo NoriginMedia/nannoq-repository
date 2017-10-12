@@ -1,4 +1,4 @@
-package com.nannoq.tools.repository;
+package com.nannoq.tools.repository.repository;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static com.nannoq.tools.repository.RedisUtils.performJedisWithRetry;
+import static com.nannoq.tools.repository.repository.RedisUtils.performJedisWithRetry;
 import static java.util.stream.Collectors.toList;
 
 public class ETagManager<E extends ETagable & DynamoDBModel & Model & Cacheable> {

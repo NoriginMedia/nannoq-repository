@@ -1,4 +1,4 @@
-package com.nannoq.tools.repository;
+package com.nannoq.tools.repository.repository;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.hazelcast.cache.ICache;

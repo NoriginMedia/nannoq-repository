@@ -24,7 +24,7 @@ import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.IntStream;
 
-import static com.nannoq.tools.repository.Repository.*;
+import static com.nannoq.tools.repository.repository.Repository.*;
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
 import static java.util.stream.Collectors.toList;
 
