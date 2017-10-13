@@ -156,7 +156,9 @@ public interface ImageUploader {
         req.end();
     }
 
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     default File imageToPng(File file) throws IOException {
+        file.setReadable(true);
         BufferedImage image = ImageIO.read(file);
         image = convertImageToRGB(image, BufferedImage.TYPE_INT_RGB);
         ImageWriter jpgWriter = ImageIO.getImageWritersByFormatName("jpg").next();

@@ -220,7 +220,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         Map<String, JsonObject> gsiMap = new ConcurrentHashMap<>();
 
         Arrays.stream(allMethods).forEach(method -> {
-            if (Arrays.stream(method.getAnnotations())
+            if (Arrays.stream(method.getDeclaredAnnotations())
                     .anyMatch(annotation -> annotation instanceof DynamoDBIndexHashKey)) {
                 final String hashName = method.getDeclaredAnnotation(DynamoDBIndexHashKey.class)
                         .globalSecondaryIndexName();
@@ -229,7 +229,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
                 if (!hashName.equals("")) {
                     Arrays.stream(allMethods).forEach(rangeMethod -> {
-                        if (Arrays.stream(method.getAnnotations())
+                        if (Arrays.stream(rangeMethod.getDeclaredAnnotations())
                                 .anyMatch(annotation -> annotation instanceof DynamoDBIndexRangeKey)) {
                             final String rangeIndexName = rangeMethod.getDeclaredAnnotation(DynamoDBIndexRangeKey.class)
                                     .globalSecondaryIndexName();

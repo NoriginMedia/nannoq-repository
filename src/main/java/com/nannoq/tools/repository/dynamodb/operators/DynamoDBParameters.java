@@ -705,7 +705,9 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
     Map<String, AttributeValue> createPageTokenMap(String encodedPageToken,
                                                    String hashIdentifier,
                                                    String rangeIdentifier,
-                                                   String paginationIdentifier) {
+                                                   String paginationIdentifier,
+                                                   String GSI,
+                                                   Map<String, JsonObject> GSI_KEY_MAP) {
         Map<String, AttributeValue> pageTokenMap = null;
         String pageToken = null;
 
@@ -723,6 +725,18 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
             pageTokenMap.putIfAbsent(hashIdentifier, hashValue);
             pageTokenMap.putIfAbsent(rangeIdentifier, rangeValue);
             pageTokenMap.putIfAbsent(paginationIdentifier, pageValue);
+
+            if (GSI != null) {
+                final JsonObject keyObject = GSI_KEY_MAP.get(GSI);
+                final String hash = keyObject.getString("hash");
+                final String range = keyObject.getString("range");
+
+                AttributeValue gsiHash = new AttributeValue().withS(pageTokenArray[3]);
+                AttributeValue gsiRange = new AttributeValue().withS(pageTokenArray[4]);
+
+                pageTokenMap.putIfAbsent(hash, gsiHash);
+                pageTokenMap.putIfAbsent(range, gsiRange);
+            }
         } else if (pageToken != null) {
             AttributeValue hashValue = new AttributeValue().withS(pageToken);
             pageTokenMap = new HashMap<>();
@@ -733,7 +747,8 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     String createNewPageToken(String hashIdentifier, String identifier, String index,
-                              Map<String, AttributeValue> lastEvaluatedKey, String alternateIndex) {
+                              Map<String, AttributeValue> lastEvaluatedKey, String GSI,
+                              Map<String, JsonObject> GSI_KEY_MAP, String alternateIndex) {
         if (logger.isDebugEnabled()) { logger.debug("Last key is: " + lastEvaluatedKey); }
 
         Object indexValue = extractIndexValue(
@@ -744,6 +759,15 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
         String newPageToken = lastEvaluatedKey.get(hashIdentifier).getS() +
                 "/" + lastEvaluatedKey.get(identifier).getS() +
                 "/" + indexValue;
+
+        if (GSI != null) {
+            final JsonObject keyObject = GSI_KEY_MAP.get(GSI);
+            final String hash = keyObject.getString("hash");
+            final String range = keyObject.getString("range");
+
+            newPageToken += "/" + lastEvaluatedKey.get(hash).getS();
+            newPageToken += "/" + lastEvaluatedKey.get(range).getS();
+        }
 
         return Base64.getUrlEncoder().encodeToString(newPageToken.getBytes());
     }
