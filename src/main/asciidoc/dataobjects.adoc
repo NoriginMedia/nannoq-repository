@@ -1,0 +1,36 @@
+= Cheatsheets
+
+[[GenericItemList]]
+== GenericItemList
+
+++++
+ Created by anders on 06/09/16.
+++++
+'''
+
+[cols=">25%,^25%,50%"]
+[frame="topbot"]
+|===
+^|Name | Type ^| Description
+|[[count]]`count`|`Number (int)`|-
+|[[etag]]`etag`|`String`|-
+|[[items]]`items`|`Array of Json object`|-
+|[[pageToken]]`pageToken`|`String`|-
+|===
+
+[[ValidationError]]
+== ValidationError
+
+++++
+ Created by anders on 08/12/2016.
+++++
+'''
+
+[cols=">25%,^25%,50%"]
+[frame="topbot"]
+|===
+^|Name | Type ^| Description
+|[[description]]`description`|`String`|-
+|[[fieldName]]`fieldName`|`String`|-
+|===
+

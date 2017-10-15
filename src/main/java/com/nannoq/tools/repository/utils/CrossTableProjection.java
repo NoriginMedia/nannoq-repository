@@ -15,7 +15,9 @@ public class CrossTableProjection {
     private List<String> models;
     private List<String> fields;
 
-    public CrossTableProjection() {}
+    public CrossTableProjection() {
+        this(null, null);
+    }
 
     public CrossTableProjection(List<String> models, List<String> TABLES) {
         this(models, TABLES, null);
@@ -33,6 +35,10 @@ public class CrossTableProjection {
 
     public List<String> getFields() {
         return fields;
+    }
+
+    public void setTABLES(List<String> TABLES) {
+        this.TABLES = TABLES;
     }
 
     public List<ValidationError> validate(AggregateFunctions function) {
