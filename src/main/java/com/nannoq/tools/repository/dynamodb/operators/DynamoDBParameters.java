@@ -22,10 +22,13 @@ import io.vertx.core.logging.LoggerFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import static com.nannoq.tools.repository.repository.Repository.*;
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
+import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
 public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cacheable> {
@@ -125,7 +128,9 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                         try {
                             db.parseParam(TYPE, values.get(0), key, params, errors);
                         } catch (Exception e) {
-                            if (logger.isDebugEnabled()) { logger.debug("Could not parse filterParams as a JsonObject, attempting array..."); }
+                            if (logger.isDebugEnabled()) {
+                                logger.debug("Could not parse filterParams as a JsonObject, attempting array...", e);
+                            }
 
                             try {
                                 JsonArray jsonArray = new JsonArray(values.get(0));
@@ -350,18 +355,20 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                                         "begins_with(" + "#name" + curCount + ", :val" + curCount + ")";
                             }
                         } else if (param.isIn()) {
-                            if (isRangeKey(peek, fieldName, param)) {
-                                buildRangeKeyCondition(filterExpression, params.size(),
-                                        peek != null ? peek.getField() : param.getField(),
-                                        ComparisonOperator.IN, param.getType(),
-                                        db.createAttributeValue(fieldName, param.getIn().toString()));
-                            } else {
-                                int curCount = count[0]++;
-                                eav.put(":val" + curCount, db.createAttributeValue(fieldName, param.getIn().toString()));
+                            AttributeValue inList = inQueryToStringChain(fieldName, param.getIn());
 
-                                keyConditionString[0] += (orderCounter[0] == 0 ? "" : " " + param.getType() + " ") + "#name" +
-                                        curCount + " IN " + ":val" + curCount;
-                            }
+                            Queue<String> keys = new ConcurrentLinkedQueue<>();
+                            AtomicInteger valCounter = new AtomicInteger();
+                            inList.getL().forEach(av -> {
+                                String currentValKey = ":inVal" + valCounter.getAndIncrement();
+                                keys.add(currentValKey);
+                                eav.put(currentValKey, av);
+                            });
+
+                            int curCount = count[0]++;
+
+                            keyConditionString[0] += (orderCounter[0] == 0 ? "" : " " + param.getType() + " ") + "#name" +
+                                    curCount + " IN (" + keys.stream().collect(joining(", ")) + ")";
                         }
 
                         orderCounter[0]++;
@@ -399,6 +406,12 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
         }
 
         return filterExpression;
+    }
+
+    private AttributeValue inQueryToStringChain(String fieldName, Object[] in) {
+        return new AttributeValue().withL(Arrays.stream(in)
+                .map(o -> db.createAttributeValue(fieldName, o.toString()))
+                .collect(toList()));
     }
 
     private boolean isRangeKey(OrderByParameter peek, FilterParameter<E> param) {
@@ -526,11 +539,20 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                         keyConditionString[0] += (orderCounter[0] == 0 ? "" : " " + param.getType() + " ") +
                                 "begins_with(" + "#name" + curCount + ", :val" + curCount + ")";
                     } else if (param.isIn()) {
+                        AttributeValue inList = inQueryToStringChain(fieldName, param.getIn());
+
+                        Queue<String> keys = new ConcurrentLinkedQueue<>();
+                        AtomicInteger valCounter = new AtomicInteger();
+                        inList.getL().forEach(av -> {
+                            String currentValKey = ":inVal" + valCounter.getAndIncrement();
+                            keys.add(currentValKey);
+                            eav.put(currentValKey, av);
+                        });
+
                         int curCount = count[0]++;
-                        eav.put(":val" + curCount, db.createAttributeValue(fieldName, param.getIn().toString()));
 
                         keyConditionString[0] += (orderCounter[0] == 0 ? "" : " " + param.getType() + " ") + "#name" +
-                                curCount + " IN " + ":val" + curCount;
+                                curCount + " IN (" + keys.stream().collect(joining(", ")) + ")";
                     }
 
                     orderCounter[0]++;

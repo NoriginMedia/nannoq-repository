@@ -2,6 +2,7 @@ package com.nannoq.tools.repository.models;
 
 import com.nannoq.tools.repository.models.utils.FilterParameterTestClass;
 import com.nannoq.tools.repository.utils.FilterParameter;
+import io.vertx.core.json.JsonArray;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -68,7 +69,7 @@ public class FilterParameterTest {
         validParameter = FilterParameter.<FilterParameterTestClass>builder()
                 .withKlazz(FilterParameterTestClass.class)
                 .withField("viewCount")
-                .withIn(1000)
+                .withIn(new Object[] {1000})
                 .build();
         assertTrue(validParameter.isIn());
         assertTrue(validParameter.isValid());

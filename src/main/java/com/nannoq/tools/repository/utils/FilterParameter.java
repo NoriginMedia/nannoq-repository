@@ -2,6 +2,7 @@ package com.nannoq.tools.repository.utils;
 
 import com.nannoq.tools.repository.models.Model;
 import io.vertx.codegen.annotations.Fluent;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -22,7 +23,7 @@ public class FilterParameter<E extends Model> {
     private Object contains;
     private Object notContains;
     private Object beginsWith;
-    private Object in;
+    private Object[] in;
     private String type;
     private Class<E> classType;
 
@@ -50,7 +51,7 @@ public class FilterParameter<E extends Model> {
         private Object contains;
         private Object notContains;
         private Object beginsWith;
-        private Object in;
+        private Object[] in;
         private String type;
 
         private boolean klazzSet = false;
@@ -280,7 +281,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withIn(Object in) {
+        public FilterParameterBuilder<E> withIn(Object[] in) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -370,7 +371,7 @@ public class FilterParameter<E extends Model> {
         return beginsWith;
     }
 
-    public Object getIn() {
+    public Object[] getIn() {
         return in;
     }
 
@@ -465,7 +466,7 @@ public class FilterParameter<E extends Model> {
     }
 
     public boolean isIllegalRangedKeyParam() {
-        return isContains() || isNotContains();
+        return isContains() || isNotContains() || isIn();
     }
 
     public boolean isValid() {
