@@ -815,6 +815,11 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         reader.readAll(identifiers, pageToken, queryPack, projections, asyncResultHandler);
     }
 
+    @Override
+    public void readAll(String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemList<E>>> asyncResultHandler) {
+        reader.readAll(pageToken, queryPack, projections, asyncResultHandler);
+    }
+
     public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections, String GSI, Handler<AsyncResult<ItemList<E>>> asyncResultHandler) {
         reader.readAll(identifiers, pageToken, queryPack, projections, GSI, asyncResultHandler);
     }

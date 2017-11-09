@@ -60,7 +60,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
             String hash = e.getHash();
             String range = e.getRange();
 
-            return TYPE.getSimpleName() + "_" + hash + (range.equals("") ? "" : "/" + range);
+            return TYPE.getSimpleName() + "_" + hash + (range == null || range.equals("") ? "" : "/" + range);
         };
 
         shortCacheIdSupplier = e -> {

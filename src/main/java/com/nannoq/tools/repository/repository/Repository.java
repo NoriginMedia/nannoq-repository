@@ -8,6 +8,7 @@ import com.nannoq.tools.repository.utils.ItemList;
 import com.nannoq.tools.repository.utils.OrderByParameter;
 import com.nannoq.tools.repository.utils.QueryPack;
 import io.vertx.core.AsyncResult;
+import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.json.Json;
@@ -21,11 +22,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.AbstractMap.SimpleEntry;
+import static java.util.stream.Collectors.toList;
 
 /**
  * Created by anders on 05/08/16.
@@ -220,6 +223,37 @@ public interface Repository<E extends ETagable & Model> {
         return readFuture;
     }
 
+    default void batchRead(Set<JsonObject> identifiers, Handler<AsyncResult<List<E>>> resultHandler) {
+        batchRead(new ArrayList<>(identifiers), resultHandler);
+    }
+
+    @SuppressWarnings("SimplifyStreamApiCallChains")
+    default void batchRead(List<JsonObject> identifiers, Handler<AsyncResult<List<E>>> resultHandler) {
+        List<Future> futureList = new ArrayList<>();
+        Queue<Future<E>> queuedFutures = new ConcurrentLinkedQueue<>();
+
+        identifiers.stream().forEachOrdered(identifier -> {
+            Future<E> future = Future.future();
+            futureList.add(future);
+            queuedFutures.add(future);
+
+            read(identifier, future.completer());
+        });
+
+        CompositeFuture.all(futureList).setHandler(res -> {
+            if (res.failed()) {
+                resultHandler.handle(ServiceException.fail(500, "Unable to performed batchread!",
+                        new JsonObject().put("ids", identifiers)));
+            } else {
+                List<E> results = queuedFutures.stream()
+                        .map(Future::result)
+                        .collect(toList());
+
+                resultHandler.handle(Future.succeededFuture(results));
+            }
+        });
+    }
+
     default void read(JsonObject identifiers, boolean consistent, Handler<AsyncResult<E>> resultHandler) {
         read(identifiers, consistent, null, resultHandler);
     }
@@ -314,6 +348,24 @@ public interface Repository<E extends ETagable & Model> {
         Future<ItemList<E>> readFuture = Future.future();
 
         readAll(identifiers, pageToken, queryPack, projections, readAllResult -> {
+            if (readAllResult.failed()) {
+                readFuture.fail(readAllResult.cause());
+            } else {
+                readFuture.complete(readAllResult.result());
+            }
+        });
+
+        return readFuture;
+    }
+
+    void readAll(String pageToken, QueryPack<E> queryPack, String[] projections,
+                 Handler<AsyncResult<ItemList<E>>> resultHandler);
+
+    default Future<ItemList<E>> readAll(String pageToken,
+                                        QueryPack<E> queryPack, String[] projections) {
+        Future<ItemList<E>> readFuture = Future.future();
+
+        readAll(pageToken, queryPack, projections, readAllResult -> {
             if (readAllResult.failed()) {
                 readFuture.fail(readAllResult.cause());
             } else {

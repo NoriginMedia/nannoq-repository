@@ -170,6 +170,11 @@ public class MongoRepository<E extends ETagable & Model> implements Repository<E
     }
 
     @Override
+    public void readAll(String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemList<E>>> asyncResultHandler) {
+
+    }
+
+    @Override
     public void aggregation(JsonObject identifiers, QueryPack<E> queryPack, String[] projections,
                             Handler<AsyncResult<String>> resultHandler) {
 

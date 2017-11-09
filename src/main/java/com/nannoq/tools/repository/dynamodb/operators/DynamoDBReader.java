@@ -55,6 +55,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
     private final int coreNum = Runtime.getRuntime().availableProcessors() * 2;
 
     private final RedisClient REDIS_CLIENT;
+    private String paginationIndex;
 
     public DynamoDBReader(Class<E> type, Vertx vertx, DynamoDBRepository<E> db, String COLLECTION,
                           String HASH_IDENTIFIER, String IDENTIFIER, String PAGINATION_IDENTIFIER,
@@ -409,6 +410,11 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         readAll(identifiers, pageToken, queryPack, projections, null, resultHandler);
     }
 
+    public void readAll(String pageToken, QueryPack<E> queryPack, String[] projections,
+                        Handler<AsyncResult<ItemList<E>>> resultHandler) {
+        readAll(new JsonObject(), pageToken, queryPack, projections, null, resultHandler);
+    }
+
     public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections,
                         String GSI, Handler<AsyncResult<ItemList<E>>> resultHandler) {
         String hash = identifiers.getString("hash");
@@ -435,7 +441,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 Integer limit = queryPack.getLimit();
 
                 if (logger.isDebugEnabled()) {
-                    logger.debug("Building expression...");
+                    logger.debug("Building expression with: " + Json.encodePrettily(queryPack));
                 }
 
                 DynamoDBQueryExpression<E> filterExpression = null;
@@ -480,7 +486,9 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
             Map<String, List<FilterParameter<E>>> params = queryPack.getParams();
             List<FilterParameter<E>> nameParams = params == null ? null : params.get(PAGINATION_IDENTIFIER);
 
-            if (logger.isDebugEnabled()) { logger.debug("Do remoteRead"); }
+            if (logger.isDebugEnabled()) {
+                logger.debug("Do remoteRead");
+            }
 
             try {
                 if (filteringExpression != null) {
@@ -489,41 +497,190 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
                 String[] effectivelyFinalProjections = dbParams.buildProjections(projections,
                         (identifiers.isEmpty() || filteringExpression == null) ?
-                                PAGINATION_INDEX : alternateIndex);
+                                getPaginationIndex() : alternateIndex);
 
-                if (identifiers.isEmpty()) {
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("Running root query...");
-                    }
+                if (identifiers.isEmpty() || identifiers.getString("hash") == null) {
+                    if (multiple != null && multiple) {
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Running root multiple id query...");
+                        }
 
-                    DynamoDBScanExpression scanExpression = new DynamoDBScanExpression();
-                    scanExpression.setLimit(20);
-                    scanExpression.setIndexName(GSI != null ? GSI : PAGINATION_INDEX);
-                    scanExpression.setConsistentRead(false);
-                    scanExpression.setExclusiveStartKey(getTokenMap(pageToken, GSI, PAGINATION_IDENTIFIER));
+                        List<String> multipleIds = identifiers.getJsonArray("range").stream()
+                                .map(Object::toString)
+                                .collect(toList());
 
-                    if (effectivelyFinalProjections != null && effectivelyFinalProjections.length > 0) {
-                        scanExpression.withSelect("SPECIFIC_ATTRIBUTES");
+                        List<KeyPair> keyPairsList = multipleIds.stream()
+                                .distinct()
+                                .map(id -> {
+                                    if (hashOnlyModel()) {
+                                        return new KeyPair().withHashKey(id);
+                                    } else {
+                                        return new KeyPair().withHashKey(hash).withRangeKey(id);
+                                    }
+                                }).collect(toList());
 
-                        if (effectivelyFinalProjections.length == 1) {
-                            scanExpression.withProjectionExpression(effectivelyFinalProjections[0]);
-                        } else {
-                            scanExpression.withProjectionExpression(String.join(", ", effectivelyFinalProjections));
+                        Map<Class<?>, List<KeyPair>> keyPairs = new HashMap<>();
+                        keyPairs.put(TYPE, keyPairsList);
+
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Keypairs: " + Json.encodePrettily(keyPairs));
+                        }
+
+                        long timeBefore = System.currentTimeMillis();
+
+                        Map<String, List<Object>> items = DYNAMO_DB_MAPPER.batchLoad(keyPairs);
+
+                        int pageCount = items.get(COLLECTION).size();
+                        int desiredCount = filteringExpression != null && filteringExpression.getLimit() != null ?
+                                filteringExpression.getLimit() : 20;
+
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
+                        }
+
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Items Returned for collection: " + pageCount);
+                        }
+
+                        List<E> allItems = items.get(COLLECTION).stream()
+                                .map(item -> (E) item)
+                                .sorted(Comparator.comparing(hashOnlyModel() ? DynamoDBModel::getHash : DynamoDBModel::getRange,
+                                        Comparator.comparingInt(multipleIds::indexOf)))
+                                .collect(toList());
+
+                        if (pageToken != null) {
+                            final Map<String, AttributeValue> pageTokenMap =
+                                    getTokenMap(pageToken, GSI, PAGINATION_IDENTIFIER);
+                            String id = pageTokenMap.get(hashOnlyModel() ? HASH_IDENTIFIER : IDENTIFIER).getS();
+
+                            final Optional<E> first = allItems.stream()
+                                    .filter(item -> {
+                                        if (hashOnlyModel()) {
+                                            if (logger.isDebugEnabled()) {
+                                                logger.debug("Id is: " + id + ", Hash is: " + item.getHash());
+                                            }
+
+                                            return item.getHash().equals(id);
+                                        } else {
+                                            if (logger.isDebugEnabled()) {
+                                                logger.debug("Id is: " + id + ", Range is: " + item.getRange());
+                                            }
+
+                                            return item.getRange().equals(id);
+                                        }
+                                    })
+                                    .findFirst();
+
+                            if (first.isPresent()) {
+                                allItems = allItems.subList(allItems.indexOf(first.get()) + 1, allItems.size());
+                            }
+                        }
+
+                        itemList = allItems.stream()
+                                .limit(desiredCount)
+                                .collect(toList());
+
+                        pageCount = allItems.size();
+                        count = pageCount < desiredCount ? pageCount : desiredCount;
+
+                        if (pageCount > desiredCount) {
+                            E lastItem = itemList.get(itemList.size() == 0 ? 0 : itemList.size() - 1);
+
+                            lastEvaluatedKey = setLastKey(lastItem, GSI, alternateIndex);
+                        }
+                    } else {
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Running root query...");
+                        }
+
+                        DynamoDBScanExpression scanExpression = dbParams.applyParameters(params);
+                        final Map<String, AttributeValue> pageTokenMap = getTokenMap(pageToken, GSI, PAGINATION_IDENTIFIER);
+
+                        scanExpression.setLimit(null);
+                        scanExpression.setIndexName(GSI != null ? GSI : getPaginationIndex());
+                        scanExpression.setConsistentRead(false);
+
+                        if (projections != null && projections.length > 0) {
+                            scanExpression.withSelect("SPECIFIC_ATTRIBUTES");
+
+                            if (projections.length == 1) {
+                                scanExpression.withProjectionExpression(projections[0]);
+                            } else {
+                                scanExpression.withProjectionExpression(String.join(", ", projections));
+                            }
+                        }
+
+                        long timeBefore = System.currentTimeMillis();
+
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Scan expression is: " + Json.encodePrettily(scanExpression));
+                        }
+
+                        ScanResultPage<E> items =
+                                DYNAMO_DB_MAPPER.scanPage(TYPE, scanExpression);
+                        int pageCount = items.getCount();
+                        int desiredCount = (queryPack.getLimit() == null || queryPack.getLimit() == 0) ? 20 : queryPack.getLimit();
+
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("DesiredCount is: " + desiredCount);
+                            logger.debug(pageCount + " results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
+                        }
+
+                        @SuppressWarnings("UnnecessaryLocalVariable")
+                        Queue<OrderByParameter> queue = queryPack.getOrderByQueue();
+
+                        final boolean orderIsAscending =
+                                queue != null && queue.size() > 0 && queue.peek().getDirection().equals("asc");
+
+                        String finalAlternateIndex = queue != null && queue.size() > 0 ?
+                                queue.peek().getField() : PAGINATION_IDENTIFIER;
+
+                        final Comparator<E> comparator = Comparator.comparing(e -> db.getFieldAsString(finalAlternateIndex, e));
+                        final Comparator<E> comparing = orderIsAscending ? comparator : comparator.reversed();
+
+                        List<E> allItems = items.getResults().stream()
+                                .sorted(comparing)
+                                .collect(toList());
+
+                        if (pageToken != null) {
+                            String id = pageTokenMap.get(hashOnlyModel() ? HASH_IDENTIFIER : IDENTIFIER).getS();
+
+                            final Optional<E> first = allItems.stream()
+                                    .filter(item -> {
+                                        if (hashOnlyModel()) {
+                                            if (logger.isDebugEnabled()) {
+                                                logger.debug("Id is: " + id + ", Hash is: " + item.getHash());
+                                            }
+
+                                            return item.getHash().equals(id);
+                                        } else {
+                                            if (logger.isDebugEnabled()) {
+                                                logger.debug("Id is: " + id + ", Range is: " + item.getRange());
+                                            }
+
+                                            return item.getRange().equals(id);
+                                        }
+                                    })
+                                    .findFirst();
+
+                            if (first.isPresent()) {
+                                allItems = allItems.subList(allItems.indexOf(first.get()) + 1, allItems.size());
+                            }
+                        }
+
+                        itemList = allItems.stream()
+                                .limit(desiredCount)
+                                .collect(toList());
+
+                        pageCount = allItems.size();
+                        count = pageCount < desiredCount ? pageCount : desiredCount;
+
+                        if (pageCount > desiredCount) {
+                            E lastItem = itemList.get(itemList.size() == 0 ? 0 : itemList.size() - 1);
+
+                            lastEvaluatedKey = setLastKey(lastItem, GSI, alternateIndex);
                         }
                     }
-
-                    long timeBefore = System.currentTimeMillis();
-
-                    ScanResultPage<E> scanPageResults =
-                            DYNAMO_DB_MAPPER.scanPage(TYPE, scanExpression);
-
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
-                    }
-
-                    count = scanPageResults.getCount();
-                    itemList = scanPageResults.getResults();
-                    lastEvaluatedKey = scanPageResults.getLastEvaluatedKey();
                 } else if (params != null && nameParams != null && dbParams.isIllegalRangedKeyQueryParams(nameParams)) {
                     if (logger.isDebugEnabled()) {
                         logger.debug("Running illegal rangedKey query...");
@@ -549,7 +706,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                     final Map<String, AttributeValue> pageTokenMap = getTokenMap(pageToken, GSI, PAGINATION_IDENTIFIER);
 
                     scanExpression.setLimit(null);
-                    scanExpression.setIndexName(GSI != null ? GSI : PAGINATION_INDEX);
+                    scanExpression.setIndexName(GSI != null ? GSI : getPaginationIndex());
                     scanExpression.setConsistentRead(false);
 
                     if (projections != null && projections.length > 0) {
@@ -638,13 +795,20 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
                         List<KeyPair> keyPairsList = multipleIds.stream()
                                 .distinct()
-                                .map(id -> new KeyPair().withHashKey(hash).withRangeKey(id))
-                                .collect(toList());
+                                .map(id -> {
+                                    if (hashOnlyModel()) {
+                                        return new KeyPair().withHashKey(id);
+                                    } else {
+                                        return new KeyPair().withHashKey(hash).withRangeKey(id);
+                                    }
+                                }).collect(toList());
 
                         Map<Class<?>, List<KeyPair>> keyPairs = new HashMap<>();
                         keyPairs.put(TYPE, keyPairsList);
 
-                        if (logger.isDebugEnabled()) { logger.debug("Keypairs: " + Json.encodePrettily(keyPairs)); }
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Keypairs: " + Json.encodePrettily(keyPairs));
+                        }
 
                         long timeBefore = System.currentTimeMillis();
 
@@ -658,7 +822,9 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                             logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
                         }
 
-                        if (logger.isDebugEnabled()) { logger.debug("Items Returned for collection: " + pageCount); }
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Items Returned for collection: " + pageCount);
+                        }
 
                         List<E> allItems = items.get(COLLECTION).stream()
                                 .map(item -> (E) item)
@@ -705,7 +871,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
                         if (filteringExpression == null) {
                             queryExpression = new DynamoDBQueryExpression<>();
-                            queryExpression.setIndexName(GSI != null ? GSI : PAGINATION_INDEX);
+                            queryExpression.setIndexName(GSI != null ? GSI : getPaginationIndex());
                             queryExpression.setLimit(20);
                             queryExpression.setScanIndexForward(false);
                             queryExpression.setExclusiveStartKey(getTokenMap(pageToken, GSI, PAGINATION_IDENTIFIER));
@@ -805,23 +971,33 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 String pagingToken = lastEvaluatedKey == null ? "END_OF_LIST" :
                         setPageToken(lastEvaluatedKey, GSI, unFilteredIndex, alternateIndex);
 
-                if (logger.isDebugEnabled()) { logger.debug("Constructed pagingtoken: " + pagingToken); }
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Constructed pagingtoken: " + pagingToken);
+                }
 
                 ItemList<E> returnList = new ItemList<>(pagingToken, count, itemList, projections);
 
-                if (logger.isDebugEnabled()) { logger.debug("Constructed itemList!"); }
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Constructed itemList!");
+                }
                 Future<Boolean> itemListCacheFuture = Future.future();
 
                 if (cacheManager.isItemListCacheAvailable()) {
-                    if (logger.isDebugEnabled()) { logger.debug("Constructing cache!"); }
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Constructing cache!");
+                    }
 
                     JsonObject cacheObject = returnList.toJson(projections);
 
-                    if (logger.isDebugEnabled()) { logger.debug("Cache complete!"); }
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Cache complete!");
+                    }
 
                     String content = cacheObject.encode();
 
-                    if (logger.isDebugEnabled()) { logger.debug("Cache encoded!"); }
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Cache encoded!");
+                    }
 
                     cacheManager.replaceItemListCache(content, () -> cacheId, cacheRes -> {
                         if (logger.isDebugEnabled()) {
@@ -870,6 +1046,10 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         });
     }
 
+    private boolean hashOnlyModel() {
+        return IDENTIFIER == null || IDENTIFIER.equals("");
+    }
+
     private String setPageToken(Map<String, AttributeValue> lastEvaluatedKey, String GSI,
                                 boolean unFilteredIndex, String alternateIndex) {
         return dbParams.createNewPageToken(HASH_IDENTIFIER, IDENTIFIER, PAGINATION_IDENTIFIER,
@@ -882,13 +1062,14 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
     private Map<String, AttributeValue> setLastKey(E lastKey, String GSI, String index) {
         Map<String, AttributeValue> keyMap = new HashMap<>();
+        boolean hashOnlyModel = hashOnlyModel();
 
         keyMap.put(HASH_IDENTIFIER, new AttributeValue().withS(lastKey.getHash()));
-        keyMap.put(IDENTIFIER, new AttributeValue().withS(lastKey.getRange()));
+        if (!hashOnlyModel) keyMap.put(IDENTIFIER, new AttributeValue().withS(lastKey.getRange()));
 
-        if (index == null) {
+        if (index == null && !hashOnlyModel) {
             keyMap.put(PAGINATION_IDENTIFIER, db.getIndexValue(PAGINATION_IDENTIFIER, lastKey));
-        } else {
+        } else if (!hashOnlyModel) {
             if (logger.isDebugEnabled()) {
                 logger.debug("Fetching remoteIndex value!");
             }
@@ -902,7 +1083,10 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
             final String range = keyObject.getString("range");
 
             keyMap.putIfAbsent(hash, new AttributeValue().withS(db.getFieldAsString(hash, lastKey)));
-            keyMap.putIfAbsent(range, db.getIndexValue(range, lastKey));
+
+            if (!hashOnlyModel) {
+                keyMap.putIfAbsent(range, db.getIndexValue(range, lastKey));
+            }
         }
 
         return keyMap;
@@ -1161,5 +1345,9 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 resultHandler.handle(Future.succeededFuture(readResult.result()));
             }
         });
+    }
+
+    private String getPaginationIndex() {
+        return PAGINATION_IDENTIFIER != null && !PAGINATION_IDENTIFIER.equals("") ? PAGINATION_INDEX : null;
     }
 }

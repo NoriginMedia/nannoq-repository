@@ -666,7 +666,7 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
             if (GSI != null) {
                 filterExpression.setIndexName(GSI);
             } else {
-                filterExpression.setIndexName(PAGINATION_INDEX);
+                filterExpression.setIndexName(getPaginationIndex());
             }
 
             filterExpression.setScanIndexForward(false);
@@ -738,15 +738,20 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
         }
 
         if (pageToken != null && pageToken.contains("/")) {
+            pageTokenMap = new HashMap<>();
             String[] pageTokenArray = pageToken.split("/");
             AttributeValue hashValue = new AttributeValue().withS(pageTokenArray[0]);
-            AttributeValue rangeValue = new AttributeValue().withS(pageTokenArray[1]);
-            AttributeValue pageValue = db.createAttributeValue(paginationIdentifier, pageTokenArray[2]);
-
-            pageTokenMap = new HashMap<>();
             pageTokenMap.putIfAbsent(hashIdentifier, hashValue);
-            pageTokenMap.putIfAbsent(rangeIdentifier, rangeValue);
-            pageTokenMap.putIfAbsent(paginationIdentifier, pageValue);
+
+            if (rangeIdentifier != null && !rangeIdentifier.equals("")) {
+                AttributeValue rangeValue = new AttributeValue().withS(pageTokenArray[1]);
+                pageTokenMap.putIfAbsent(rangeIdentifier, rangeValue);
+            }
+
+            if (paginationIdentifier != null && !paginationIdentifier.equals("")) {
+                AttributeValue pageValue = db.createAttributeValue(paginationIdentifier, pageTokenArray[2]);
+                pageTokenMap.putIfAbsent(paginationIdentifier, pageValue);
+            }
 
             if (GSI != null) {
                 final JsonObject keyObject = GSI_KEY_MAP.get(GSI);
@@ -754,10 +759,12 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                 final String range = keyObject.getString("range");
 
                 AttributeValue gsiHash = new AttributeValue().withS(pageTokenArray[3]);
-                AttributeValue gsiRange = new AttributeValue().withS(pageTokenArray[4]);
-
                 pageTokenMap.putIfAbsent(hash, gsiHash);
-                pageTokenMap.putIfAbsent(range, gsiRange);
+
+                if (range != null && pageTokenArray.length > 4) {
+                    AttributeValue gsiRange = new AttributeValue().withS(pageTokenArray[4]);
+                    pageTokenMap.putIfAbsent(range, gsiRange);
+                }
             }
         } else if (pageToken != null) {
             AttributeValue hashValue = new AttributeValue().withS(pageToken);
@@ -773,14 +780,22 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                               Map<String, JsonObject> GSI_KEY_MAP, String alternateIndex) {
         if (logger.isDebugEnabled()) { logger.debug("Last key is: " + lastEvaluatedKey); }
 
-        Object indexValue = extractIndexValue(
-                lastEvaluatedKey.get(alternateIndex == null ? index : alternateIndex));
+        Object indexValue;
 
-        if (logger.isDebugEnabled()) { logger.debug("Index value is: " + lastEvaluatedKey); }
+        if (index == null && alternateIndex == null) {
+            indexValue = null;
+        } else {
+            indexValue = extractIndexValue(
+                    lastEvaluatedKey.get(alternateIndex == null ? index : alternateIndex));
+        }
+
+        if (logger.isDebugEnabled()) { logger.debug("Index value is: " + indexValue); }
+
+        final AttributeValue identifierValue = lastEvaluatedKey.get(identifier);
 
         String newPageToken = lastEvaluatedKey.get(hashIdentifier).getS() +
-                "/" + lastEvaluatedKey.get(identifier).getS() +
-                "/" + indexValue;
+                (identifierValue == null ? "" : "/" + identifierValue.getS()) + (indexValue == null ? "" :
+                "/" + indexValue);
 
         if (GSI != null) {
             final JsonObject keyObject = GSI_KEY_MAP.get(GSI);
@@ -788,13 +803,18 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
             final String range = keyObject.getString("range");
 
             newPageToken += "/" + lastEvaluatedKey.get(hash).getS();
-            newPageToken += "/" + lastEvaluatedKey.get(range).getS();
+
+            if (range != null && lastEvaluatedKey.get(range) != null) {
+                newPageToken += "/" + lastEvaluatedKey.get(range).getS();
+            }
         }
 
         return Base64.getUrlEncoder().encodeToString(newPageToken.getBytes());
     }
 
     private Object extractIndexValue(AttributeValue attributeValue) {
+        if (attributeValue == null) return null;
+
         if (attributeValue.getS() != null) {
             return attributeValue.getS();
         } else if (attributeValue.getBOOL() != null) {
@@ -804,5 +824,9 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
         }
 
         throw new UnknownError("Cannot find indexvalue!");
+    }
+
+    private String getPaginationIndex() {
+        return PAGINATION_IDENTIFIER != null && !PAGINATION_IDENTIFIER.equals("") ? PAGINATION_INDEX : null;
     }
 }
