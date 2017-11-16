@@ -19,9 +19,12 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
+import com.nannoq.tools.repository.repository.results.ItemListResult;
+import com.nannoq.tools.repository.repository.results.ItemResult;
 import com.nannoq.tools.repository.services.internal.InternalRepositoryService;
 import com.nannoq.tools.repository.utils.*;
 import io.vertx.core.AsyncResult;
+import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.Json;
@@ -33,7 +36,6 @@ import io.vertx.redis.RedisClient;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.log4j.Level;
 
-import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
@@ -791,12 +793,12 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     @Override
-    public void read(JsonObject identifiers, Handler<AsyncResult<E>> asyncResultHandler) {
+    public void read(JsonObject identifiers, Handler<AsyncResult<ItemResult<E>>> asyncResultHandler) {
         reader.read(identifiers, asyncResultHandler);
     }
 
     @Override
-    public void read(JsonObject identifiers, boolean consistent, String[] projections, Handler<AsyncResult<E>> asyncResultHandler) {
+    public void read(JsonObject identifiers, boolean consistent, String[] projections, Handler<AsyncResult<ItemResult<E>>> asyncResultHandler) {
         reader.read(identifiers, consistent, projections, asyncResultHandler);
     }
 
@@ -811,16 +813,16 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     @Override
-    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemList<E>>> asyncResultHandler) {
+    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
         reader.readAll(identifiers, pageToken, queryPack, projections, asyncResultHandler);
     }
 
     @Override
-    public void readAll(String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemList<E>>> asyncResultHandler) {
+    public void readAll(String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
         reader.readAll(pageToken, queryPack, projections, asyncResultHandler);
     }
 
-    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections, String GSI, Handler<AsyncResult<ItemList<E>>> asyncResultHandler) {
+    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections, String GSI, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
         reader.readAll(identifiers, pageToken, queryPack, projections, GSI, asyncResultHandler);
     }
 
@@ -896,14 +898,26 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     @Override
     public InternalRepositoryService<E> remoteCreate(E record, Handler<AsyncResult<E>> asyncResultHandler) {
-        create(record, asyncResultHandler);
+        create(record, res -> {
+            if (res.failed()) {
+                asyncResultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
+                asyncResultHandler.handle(Future.succeededFuture(res.result().getItem()));
+            }
+        });
 
         return this;
     }
 
     @Override
     public InternalRepositoryService<E> remoteRead(JsonObject identifiers, Handler<AsyncResult<E>> asyncResultHandler) {
-        read(identifiers, asyncResultHandler);
+        read(identifiers, res -> {
+            if (res.failed()) {
+                asyncResultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
+                asyncResultHandler.handle(res.map(res.result().getItem()));
+            }
+        });
 
         return this;
     }
@@ -918,14 +932,26 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     @SuppressWarnings("unchecked")
     @Override
     public InternalRepositoryService<E> remoteUpdate(E record, Handler<AsyncResult<E>> asyncResultHandler) {
-        update(record, r -> (E) record.setModifiables(r), asyncResultHandler);
+        update(record, r -> (E) record.setModifiables(r), res -> {
+            if (res.failed()) {
+                asyncResultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
+                asyncResultHandler.handle(Future.succeededFuture(res.result().getItem()));
+            }
+        });
 
         return this;
     }
 
     @Override
     public InternalRepositoryService<E> remoteDelete(JsonObject identifiers, Handler<AsyncResult<E>> asyncResultHandler) {
-        delete(identifiers, asyncResultHandler);
+        delete(identifiers, res -> {
+            if (res.failed()) {
+                asyncResultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
+                asyncResultHandler.handle(Future.succeededFuture(res.result().getItem()));
+            }
+        });
 
         return this;
     }

@@ -3,10 +3,8 @@ package com.nannoq.tools.repository.repository;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.models.ModelUtils;
-import com.nannoq.tools.repository.utils.FilterParameter;
-import com.nannoq.tools.repository.utils.ItemList;
-import com.nannoq.tools.repository.utils.OrderByParameter;
-import com.nannoq.tools.repository.utils.QueryPack;
+import com.nannoq.tools.repository.repository.results.*;
+import com.nannoq.tools.repository.utils.*;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
@@ -45,12 +43,12 @@ public interface Repository<E extends ETagable & Model> {
 
     enum INCREMENTATION { ADDITION, SUBTRACTION }
 
-    default void create(E record, Handler<AsyncResult<E>> resultHandler) {
+    default void create(E record, Handler<AsyncResult<CreateResult<E>>> resultHandler) {
         batchCreate(Collections.singletonList(record), res -> {
             if (res.failed()) {
                 resultHandler.handle(Future.failedFuture(res.cause()));
             } else {
-                Iterator<E> iterator = res.result().iterator();
+                Iterator<CreateResult<E>> iterator = res.result().iterator();
 
                 if (iterator.hasNext()) {
                     resultHandler.handle(Future.succeededFuture(iterator.next()));
@@ -61,8 +59,8 @@ public interface Repository<E extends ETagable & Model> {
         });
     }
 
-    default Future<E> create(E record) {
-        Future<E> createFuture = Future.future();
+    default Future<CreateResult<E>> create(E record) {
+        Future<CreateResult<E>> createFuture = Future.future();
 
         create(record, createResult -> {
             if (createResult.failed()) {
@@ -75,15 +73,22 @@ public interface Repository<E extends ETagable & Model> {
         return createFuture;
     }
 
-    default void batchCreate(List<E> records, Handler<AsyncResult<List<E>>> resultHandler) {
+    default void batchCreate(List<E> records, Handler<AsyncResult<List<CreateResult<E>>>> resultHandler) {
         doWrite(true, records.stream()
                 .map(r -> new SimpleEntry<E, Function<E, E>>(r, record -> record))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)), resultHandler
-        );
+                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)), res -> {
+            if (res.failed()) {
+                resultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
+                resultHandler.handle(Future.succeededFuture(res.result().stream()
+                        .map(CreateResult::new)
+                        .collect(toList())));
+            }
+        });
     }
 
-    default Future<List<E>> batchCreate(List<E> records) {
-        Future<List<E>> createFuture = Future.future();
+    default Future<List<CreateResult<E>>> batchCreate(List<E> records) {
+        Future<List<CreateResult<E>>> createFuture = Future.future();
 
         batchCreate(records, createResult -> {
             if (createResult.failed()) {
@@ -96,12 +101,12 @@ public interface Repository<E extends ETagable & Model> {
         return createFuture;
     }
 
-    default void update(E record, Function<E, E> updateLogic, Handler<AsyncResult<E>> resultHandler) {
+    default void update(E record, Function<E, E> updateLogic, Handler<AsyncResult<UpdateResult<E>>> resultHandler) {
         batchUpdate(Collections.singletonMap(record, updateLogic), res -> {
             if (res.failed()) {
                 resultHandler.handle(Future.failedFuture(res.cause()));
             } else {
-                Iterator<E> iterator = res.result().iterator();
+                Iterator<UpdateResult<E>> iterator = res.result().iterator();
 
                 if (iterator.hasNext()) {
                     resultHandler.handle(Future.succeededFuture(iterator.next()));
@@ -112,8 +117,8 @@ public interface Repository<E extends ETagable & Model> {
         });
     }
 
-    default Future<E> update(E record, Function<E, E> updateLogic) {
-        Future<E> updateFuture = Future.future();
+    default Future<UpdateResult<E>> update(E record, Function<E, E> updateLogic) {
+        Future<UpdateResult<E>> updateFuture = Future.future();
 
         update(record, updateLogic, updateResult -> {
             if (updateResult.failed()) {
@@ -126,12 +131,20 @@ public interface Repository<E extends ETagable & Model> {
         return updateFuture;
     }
 
-    default void batchUpdate(Map<E, Function<E, E>> records, Handler<AsyncResult<List<E>>> resultHandler) {
-        doWrite(false, records, resultHandler);
+    default void batchUpdate(Map<E, Function<E, E>> records, Handler<AsyncResult<List<UpdateResult<E>>>> resultHandler) {
+        doWrite(false, records, res -> {
+            if (res.failed()) {
+                resultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
+                resultHandler.handle(Future.succeededFuture(res.result().stream()
+                        .map(UpdateResult::new)
+                        .collect(toList())));
+            }
+        });
     }
 
-    default Future<List<E>> batchUpdate(Map<E, Function<E, E>> records) {
-        Future<List<E>> updateFuture = Future.future();
+    default Future<List<UpdateResult<E>>> batchUpdate(Map<E, Function<E, E>> records) {
+        Future<List<UpdateResult<E>>> updateFuture = Future.future();
 
         batchUpdate(records, updateResult -> {
             if (updateResult.failed()) {
@@ -144,7 +157,7 @@ public interface Repository<E extends ETagable & Model> {
         return updateFuture;
     }
 
-    default void delete(JsonObject identifiers, Handler<AsyncResult<E>> resultHandler) {
+    default void delete(JsonObject identifiers, Handler<AsyncResult<DeleteResult<E>>> resultHandler) {
         if (identifiers.isEmpty()) {
             resultHandler.handle(ServiceException.fail(400,
                     "Identifier for remoteDelete cannot be empty!"));
@@ -153,7 +166,7 @@ public interface Repository<E extends ETagable & Model> {
                 if (res.failed()) {
                     resultHandler.handle(Future.failedFuture(res.cause()));
                 } else {
-                    Iterator<E> iterator = res.result().iterator();
+                    Iterator<DeleteResult<E>> iterator = res.result().iterator();
 
                     if (iterator.hasNext()) {
                         resultHandler.handle(Future.succeededFuture(iterator.next()));
@@ -165,8 +178,8 @@ public interface Repository<E extends ETagable & Model> {
         }
     }
 
-    default Future<E> delete(JsonObject identifiers) {
-        Future<E> deleteFuture = Future.future();
+    default Future<DeleteResult<E>> delete(JsonObject identifiers) {
+        Future<DeleteResult<E>> deleteFuture = Future.future();
 
         delete(identifiers, deleteResult -> {
             if (deleteResult.failed()) {
@@ -180,17 +193,25 @@ public interface Repository<E extends ETagable & Model> {
     }
 
     default void batchDelete(List<JsonObject> identifiers,
-                             Handler<AsyncResult<List<E>>> resultHandler) {
+                             Handler<AsyncResult<List<DeleteResult<E>>>> resultHandler) {
         if (identifiers.isEmpty()) {
             resultHandler.handle(ServiceException.fail(400,
                     "Identifiers for batchDelete cannot be empty!"));
         } else {
-            doDelete(identifiers, resultHandler);
+            doDelete(identifiers, res -> {
+                if (res.failed()) {
+                    resultHandler.handle(Future.failedFuture(res.cause()));
+                } else {
+                    resultHandler.handle(Future.succeededFuture(res.result().stream()
+                            .map(DeleteResult::new)
+                            .collect(toList())));
+                }
+            });
         }
     }
 
-    default Future<List<E>> batchDelete(List<JsonObject> identifiers) {
-        Future<List<E>> deleteFuture = Future.future();
+    default Future<List<DeleteResult<E>>> batchDelete(List<JsonObject> identifiers) {
+        Future<List<DeleteResult<E>>> deleteFuture = Future.future();
 
         batchDelete(identifiers, deleteResult -> {
             if (deleteResult.failed()) {
@@ -207,10 +228,10 @@ public interface Repository<E extends ETagable & Model> {
 
     boolean decrementField(E record, String fieldName) throws IllegalArgumentException;
 
-    void read(JsonObject identifiers, Handler<AsyncResult<E>> resultHandler);
+    void read(JsonObject identifiers, Handler<AsyncResult<ItemResult<E>>> resultHandler);
 
-    default Future<E> read(JsonObject identifiers) {
-        Future<E> readFuture = Future.future();
+    default Future<ItemResult<E>> read(JsonObject identifiers) {
+        Future<ItemResult<E>> readFuture = Future.future();
 
         read(identifiers, readResult -> {
             if (readResult.failed()) {
@@ -223,17 +244,17 @@ public interface Repository<E extends ETagable & Model> {
         return readFuture;
     }
 
-    default void batchRead(Set<JsonObject> identifiers, Handler<AsyncResult<List<E>>> resultHandler) {
+    default void batchRead(Set<JsonObject> identifiers, Handler<AsyncResult<List<ItemResult<E>>>> resultHandler) {
         batchRead(new ArrayList<>(identifiers), resultHandler);
     }
 
     @SuppressWarnings("SimplifyStreamApiCallChains")
-    default void batchRead(List<JsonObject> identifiers, Handler<AsyncResult<List<E>>> resultHandler) {
+    default void batchRead(List<JsonObject> identifiers, Handler<AsyncResult<List<ItemResult<E>>>> resultHandler) {
         List<Future> futureList = new ArrayList<>();
-        Queue<Future<E>> queuedFutures = new ConcurrentLinkedQueue<>();
+        Queue<Future<ItemResult<E>>> queuedFutures = new ConcurrentLinkedQueue<>();
 
         identifiers.stream().forEachOrdered(identifier -> {
-            Future<E> future = Future.future();
+            Future<ItemResult<E>> future = Future.future();
             futureList.add(future);
             queuedFutures.add(future);
 
@@ -245,7 +266,7 @@ public interface Repository<E extends ETagable & Model> {
                 resultHandler.handle(ServiceException.fail(500, "Unable to performed batchread!",
                         new JsonObject().put("ids", identifiers)));
             } else {
-                List<E> results = queuedFutures.stream()
+                List<ItemResult<E>> results = queuedFutures.stream()
                         .map(Future::result)
                         .collect(toList());
 
@@ -254,12 +275,12 @@ public interface Repository<E extends ETagable & Model> {
         });
     }
 
-    default void read(JsonObject identifiers, boolean consistent, Handler<AsyncResult<E>> resultHandler) {
+    default void read(JsonObject identifiers, boolean consistent, Handler<AsyncResult<ItemResult<E>>> resultHandler) {
         read(identifiers, consistent, null, resultHandler);
     }
 
-    default Future<E> read(JsonObject identifiers, boolean consistent) {
-        Future<E> readFuture = Future.future();
+    default Future<ItemResult<E>> read(JsonObject identifiers, boolean consistent) {
+        Future<ItemResult<E>> readFuture = Future.future();
 
         read(identifiers, consistent, readResult -> {
             if (readResult.failed()) {
@@ -272,10 +293,10 @@ public interface Repository<E extends ETagable & Model> {
         return readFuture;
     }
 
-    void read(JsonObject identifiers, boolean consistent, String[] projections, Handler<AsyncResult<E>> resultHandler);
+    void read(JsonObject identifiers, boolean consistent, String[] projections, Handler<AsyncResult<ItemResult<E>>> resultHandler);
 
-    default Future<E> read(JsonObject identifiers, boolean consistent, String[] projections) {
-        Future<E> readFuture = Future.future();
+    default Future<ItemResult<E>> read(JsonObject identifiers, boolean consistent, String[] projections) {
+        Future<ItemResult<E>> readFuture = Future.future();
 
         read(identifiers, consistent, projections, readResult -> {
             if (readResult.failed()) {
@@ -304,12 +325,12 @@ public interface Repository<E extends ETagable & Model> {
         return readFuture;
     }
 
-    default void readAll(String pageToken, Handler<AsyncResult<ItemList<E>>> resultHandler) {
+    default void readAll(String pageToken, Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
         readAll(null, pageToken, null, null, resultHandler);
     }
 
-    default Future<ItemList<E>> readAll(String pageToken) {
-        Future<ItemList<E>> readFuture = Future.future();
+    default Future<ItemListResult<E>> readAll(String pageToken) {
+        Future<ItemListResult<E>> readFuture = Future.future();
 
         readAll(null, pageToken, null, null, readAllResult -> {
             if (readAllResult.failed()) {
@@ -341,11 +362,11 @@ public interface Repository<E extends ETagable & Model> {
     }
 
     void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections,
-                 Handler<AsyncResult<ItemList<E>>> resultHandler);
+                 Handler<AsyncResult<ItemListResult<E>>> resultHandler);
 
-    default Future<ItemList<E>> readAll(JsonObject identifiers, String pageToken,
+    default Future<ItemListResult<E>> readAll(JsonObject identifiers, String pageToken,
                                         QueryPack<E> queryPack, String[] projections) {
-        Future<ItemList<E>> readFuture = Future.future();
+        Future<ItemListResult<E>> readFuture = Future.future();
 
         readAll(identifiers, pageToken, queryPack, projections, readAllResult -> {
             if (readAllResult.failed()) {
@@ -359,11 +380,11 @@ public interface Repository<E extends ETagable & Model> {
     }
 
     void readAll(String pageToken, QueryPack<E> queryPack, String[] projections,
-                 Handler<AsyncResult<ItemList<E>>> resultHandler);
+                 Handler<AsyncResult<ItemListResult<E>>> resultHandler);
 
-    default Future<ItemList<E>> readAll(String pageToken,
-                                        QueryPack<E> queryPack, String[] projections) {
-        Future<ItemList<E>> readFuture = Future.future();
+    default Future<ItemListResult<E>> readAll(String pageToken,
+                                              QueryPack<E> queryPack, String[] projections) {
+        Future<ItemListResult<E>> readFuture = Future.future();
 
         readAll(pageToken, queryPack, projections, readAllResult -> {
             if (readAllResult.failed()) {
