@@ -31,6 +31,12 @@ import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
+/**
+ * This class is used to define the parameters for various operations for the DynamoDBRepository.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBParameters.class.getSimpleName());
 

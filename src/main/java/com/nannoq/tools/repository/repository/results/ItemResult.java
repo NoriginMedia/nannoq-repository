@@ -4,8 +4,10 @@ import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 
 /**
- * User: anders
- * Date: 13.11.17 15:42
+ * This class defines a container for the result of a show operation.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class ItemResult<K extends ETagable & Model> {
     private final K item;

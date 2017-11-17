@@ -5,7 +5,10 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 /**
- * Created by anders on 09/11/2016.
+ * This class defines an orderByParameter, which is used for sorting results.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class OrderByParameter {
     private String field;

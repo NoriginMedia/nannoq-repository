@@ -25,6 +25,12 @@ import java.io.IOException;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+/**
+ * This class defines an interface for models that have image upload functionality.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public interface ImageUploader {
     Logger logger = LoggerFactory.getLogger(ImageUploader.class.getSimpleName());
 

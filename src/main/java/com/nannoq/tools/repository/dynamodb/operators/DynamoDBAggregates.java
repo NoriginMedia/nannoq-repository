@@ -25,6 +25,12 @@ import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.*;
 
+/**
+ * This class defines the aggregate operations for the DynamoDBRepository.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 @SuppressWarnings("Convert2MethodRef")
 public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBAggregates.class.getSimpleName());
@@ -38,10 +44,10 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
     private final CacheManager<E> cacheManager;
     private final ETagManager<E> eTagManager;
 
-    public DynamoDBAggregates(Class<E> type, DynamoDBRepository<E> db,
+    public DynamoDBAggregates(Class<E> TYPE, DynamoDBRepository<E> db,
                               String HASH_IDENTIFIER, String IDENTIFIER,
                               CacheManager<E> cacheManager, ETagManager<E> eTagManager) {
-        TYPE = type;
+        this.TYPE = TYPE;
         this.db = db;
         this.HASH_IDENTIFIER = HASH_IDENTIFIER;
         this.IDENTIFIER = IDENTIFIER;
@@ -104,28 +110,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                         } else {
                             if (queryPack.getAggregateFunction().hasGrouping()) {
                                 List<E> minItems = getAllItemsWithLowestValue(allResult.result(), field);
-                                JsonObject aggregatedItems = performGroupingAndSorting(minItems, aggregateFunction, (items, groupingConfigurations) -> {
-                                    if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
-                                    GroupingConfiguration levelOne = groupingConfigurations.get(0);
-                                    GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
-                                    GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
-
-                                    if (levelOne != null && levelTwo == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne)));
-                                    } else if (levelOne != null && levelThree == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo))));
-                                    } else if (levelThree != null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                groupingBy(item -> calculateGroupingKey(item, levelThree)))));
-                                    }
-
-                                    throw new IllegalArgumentException();
-                                });
+                                JsonObject aggregatedItems = calculateGroupings(aggregateFunction, minItems);
 
                                 setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, aggregatedItems.encode(), resultHandler);
                             } else {
@@ -144,16 +129,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                 final String[][] projs = {projections};
                 String[] finalProjections = projections == null ? new String[]{} : projections;
 
-                if (groupingParam != null) {
-                    groupingParam.stream()
-                            .filter(param -> Arrays.stream(finalProjections).noneMatch(p -> p.equals(param.getGroupBy())))
-                            .forEach(groupByParam -> {
-                                String[] newProjectionArray = new String[finalProjections.length + 1];
-                                IntStream.range(0, finalProjections.length).forEach(i -> newProjectionArray[i] = finalProjections[i]);
-                                newProjectionArray[finalProjections.length] = groupByParam.getGroupBy();
-                                projs[0] = newProjectionArray;
-                            });
-                }
+                calculateGroupingPageToken(groupingParam, projs, finalProjections);
 
                 String[] finalProjections2 = projs[0] == null ? new String[]{} : projs[0];
 
@@ -168,22 +144,66 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
 
                 if (logger.isDebugEnabled()) { logger.debug("Projections: " + Arrays.toString(projs[0])); }
 
-                if (identifiers.isEmpty()) {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(queryPack, addIdentifiers(projs[0]), GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(queryPack, addIdentifiers(projs[0]), res);
-                    }
-                } else {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, addIdentifiers(projs[0]), GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, addIdentifiers(projs[0]), res);
-                    }
-                }
+                doIdentifierBasedQuery(identifiers, queryPack, GSI, res, projs);
             } else {
                 resultHandler.handle(Future.succeededFuture(cacheRes.result()));
             }
+        });
+    }
+
+    private void doIdentifierBasedQuery(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+                                        Handler<AsyncResult<List<E>>> res, String[][] projs) {
+        if (identifiers.isEmpty()) {
+            if (GSI != null) {
+                db.readAllWithoutPagination(queryPack, addIdentifiers(projs[0]), GSI, res);
+            } else {
+                db.readAllWithoutPagination(queryPack, addIdentifiers(projs[0]), res);
+            }
+        } else {
+            if (GSI != null) {
+                db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, addIdentifiers(projs[0]), GSI, res);
+            } else {
+                db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, addIdentifiers(projs[0]), res);
+            }
+        }
+    }
+
+    private void calculateGroupingPageToken(List<GroupingConfiguration> groupingParam, String[][] projs, String[] finalProjections) {
+        if (groupingParam != null) {
+            groupingParam.stream()
+                    .filter(param -> Arrays.stream(finalProjections).noneMatch(p -> p.equals(param.getGroupBy())))
+                    .forEach(groupByParam -> {
+                        String[] newProjectionArray = new String[finalProjections.length + 1];
+                        IntStream.range(0, finalProjections.length).forEach(i -> newProjectionArray[i] = finalProjections[i]);
+                        newProjectionArray[finalProjections.length] = groupByParam.getGroupBy();
+                        projs[0] = newProjectionArray;
+                    });
+        }
+    }
+
+    private JsonObject calculateGroupings(AggregateFunction aggregateFunction, List<E> minItems) {
+        return performGroupingAndSorting(minItems, aggregateFunction, (items, groupingConfigurations) -> {
+            if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
+            GroupingConfiguration levelOne = groupingConfigurations.get(0);
+            GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
+            GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
+
+            if (levelOne != null && levelTwo == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne)));
+            } else if (levelOne != null && levelThree == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo))));
+            } else if (levelThree != null) {
+                //noinspection ConstantConditions
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo),
+                                        groupingBy(item -> calculateGroupingKey(item, levelThree)))));
+            }
+
+            throw new IllegalArgumentException();
         });
     }
 
@@ -234,28 +254,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                         } else {
                             if (queryPack.getAggregateFunction().hasGrouping()) {
                                 List<E> maxItems = getAllItemsWithHighestValue(allResult.result(), field);
-                                JsonObject aggregatedItems = performGroupingAndSorting(maxItems, aggregateFunction, (items, groupingConfigurations) -> {
-                                    if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
-                                    GroupingConfiguration levelOne = groupingConfigurations.get(0);
-                                    GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
-                                    GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
-
-                                    if (levelOne != null && levelTwo == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne)));
-                                    } else if (levelOne != null && levelThree == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo))));
-                                    } else if (levelThree != null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                groupingBy(item -> calculateGroupingKey(item, levelThree)))));
-                                    }
-
-                                    throw new IllegalArgumentException();
-                                });
+                                JsonObject aggregatedItems = calculateGroupings(aggregateFunction, maxItems);
 
                                 setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, aggregatedItems.encode(), resultHandler);
                             } else {
@@ -274,16 +273,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                 final String[][] projs = {projections};
                 String[] finalProjections = projections == null ? new String[]{} : projections;
 
-                if (groupingParam != null) {
-                    groupingParam.stream()
-                            .filter(param -> Arrays.stream(finalProjections).noneMatch(p -> p.equals(param.getGroupBy())))
-                            .forEach(groupByParam -> {
-                                String[] newProjectionArray = new String[finalProjections.length + 1];
-                                IntStream.range(0, finalProjections.length).forEach(i -> newProjectionArray[i] = finalProjections[i]);
-                                newProjectionArray[finalProjections.length] = groupByParam.getGroupBy();
-                                projs[0] = newProjectionArray;
-                            });
-                }
+                calculateGroupingPageToken(groupingParam, projs, finalProjections);
 
                 String[] finalProjections2 = projs[0] == null ? new String[]{} : projs[0];
 
@@ -298,19 +288,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
 
                 if (logger.isDebugEnabled()) { logger.debug("Projections: " + Arrays.toString(projs[0])); }
 
-                if (identifiers.isEmpty()) {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(queryPack, addIdentifiers(projs[0]), GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(queryPack, addIdentifiers(projs[0]), res);
-                    }
-                } else {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, addIdentifiers(projs[0]), GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, addIdentifiers(projs[0]), res);
-                    }
-                }
+                doIdentifierBasedQuery(identifiers, queryPack, GSI, res, projs);
             } else {
                 resultHandler.handle(Future.succeededFuture(cacheRes.result()));
             }
@@ -394,31 +372,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                             JsonObject avg;
 
                             if (queryPack.getAggregateFunction().hasGrouping()) {
-                                avg = performGroupingAndSorting(allResult.result(), aggregateFunction, (items, groupingConfigurations) -> {
-                                    if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
-                                    GroupingConfiguration levelOne = groupingConfigurations.get(0);
-                                    GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
-                                    GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
-
-                                    if (levelOne != null && levelTwo == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        averagingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))));
-                                    } else if (levelOne != null && levelThree == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                averagingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item)))));
-                                    } else if (levelThree != null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                groupingBy(item -> calculateGroupingKey(item, levelThree),
-                                                                        summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))))));
-                                    }
-
-                                    throw new IllegalArgumentException();
-                                });
+                                avg = avgGrouping(allResult.result(), aggregateFunction, field);
                             } else {
                                 avg = new JsonObject();
 
@@ -440,34 +394,67 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                 final String[][] projections = {new String[]{field}};
                 String[] finalProjections = projections[0];
 
-                if (groupingParam != null) {
-                    groupingParam.stream()
-                            .filter(param -> Arrays.stream(finalProjections).noneMatch(p -> p.equals(param.getGroupBy())))
-                            .forEach(groupByParam -> {
-                                String[] newProjectionArray = new String[finalProjections.length + 1];
-                                IntStream.range(0, finalProjections.length).forEach(i -> newProjectionArray[i] = finalProjections[i]);
-                                newProjectionArray[finalProjections.length] = groupByParam.getGroupBy();
-                                projections[0] = newProjectionArray;
-                            });
-                }
+                calculateGroupingPageToken(groupingParam, projections, finalProjections);
 
-                if (identifiers.isEmpty()) {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(queryPack, projections[0], GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(queryPack, projections[0], res);
-                    }
-                } else {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections[0], GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections[0], res);
-                    }
-                }
+                doIdentifierBasedQueryNoIdentifierAddition(identifiers, queryPack, GSI, res, projections);
             } else {
                 resultHandler.handle(Future.succeededFuture(cacheRes.result()));
             }
         });
+    }
+
+    private JsonObject avgGrouping(List<E> result, AggregateFunction aggregateFunction, String field) {
+        return performGroupingAndSorting(result, aggregateFunction, (items, groupingConfigurations) -> {
+            if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
+            GroupingConfiguration levelOne = groupingConfigurations.get(0);
+            GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
+            GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
+
+            if (levelOne != null && levelTwo == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                averagingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))));
+            } else if (levelOne != null && levelThree == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo),
+                                        averagingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item)))));
+            } else if (levelThree != null) {
+                //noinspection ConstantConditions
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo),
+                                        groupingBy(item -> calculateGroupingKey(item, levelThree),
+                                                summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))))));
+            }
+
+            throw new IllegalArgumentException();
+        });
+    }
+
+    private void doIdentifierBasedQueryNoIdentifierAddition(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+                                                            Handler<AsyncResult<List<E>>> res, String[] projections) {
+        String[][] temp = new String[1][1];
+        temp[0] = projections;
+
+        doIdentifierBasedQueryNoIdentifierAddition(identifiers, queryPack, GSI, res, temp);
+    }
+
+    private void doIdentifierBasedQueryNoIdentifierAddition(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+                                                            Handler<AsyncResult<List<E>>> res, String[][] projections) {
+        if (identifiers.isEmpty()) {
+            if (GSI != null) {
+                db.readAllWithoutPagination(queryPack, projections[0], GSI, res);
+            } else {
+                db.readAllWithoutPagination(queryPack, projections[0], res);
+            }
+        } else {
+            if (GSI != null) {
+                db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections[0], GSI, res);
+            } else {
+                db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections[0], res);
+            }
+        }
     }
 
     private void sumField(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
@@ -497,31 +484,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                                     new JsonObject().put("error", "Empty table!").encode(), resultHandler);
                         } else {
                             JsonObject sum = aggregateFunction.hasGrouping() ?
-                                    performGroupingAndSorting(allResult.result(), aggregateFunction, (items, groupingConfigurations) -> {
-                                        if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
-                                        GroupingConfiguration levelOne = groupingConfigurations.get(0);
-                                        GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
-                                        GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
-
-                                        if (levelOne != null && levelTwo == null) {
-                                            return items.parallelStream()
-                                                    .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                            summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))));
-                                        } else if (levelOne != null && levelThree == null) {
-                                            return items.parallelStream()
-                                                    .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                            groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                    summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item)))));
-                                        } else if (levelThree != null) {
-                                            return items.parallelStream()
-                                                    .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                            groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                    groupingBy(item -> calculateGroupingKey(item, levelThree),
-                                                                            summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))))));
-                                        }
-
-                                        throw new IllegalArgumentException();
-                                    }) :
+                                    sumGrouping(allResult.result(), aggregateFunction, field) :
                                     new JsonObject().put("sum", records.stream()
                                             .mapToDouble(r -> db.extractValueAsDouble(db.checkAndGetField(field), r))
                                             .filter(Objects::nonNull)
@@ -535,33 +498,41 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                 final String[][] projections = {new String[]{field}};
                 String[] finalProjections = projections[0];
 
-                if (groupingParam != null) {
-                    groupingParam.stream()
-                            .filter(param -> Arrays.stream(finalProjections).noneMatch(p -> p.equals(param.getGroupBy())))
-                            .forEach(groupByParam -> {
-                                String[] newProjectionArray = new String[finalProjections.length + 1];
-                                IntStream.range(0, finalProjections.length).forEach(i -> newProjectionArray[i] = finalProjections[i]);
-                                newProjectionArray[finalProjections.length] = groupByParam.getGroupBy();
-                                projections[0] = newProjectionArray;
-                            });
-                }
+                calculateGroupingPageToken(groupingParam, projections, finalProjections);
 
-                if (identifiers.isEmpty()) {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(queryPack, projections[0], GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(queryPack, projections[0], res);
-                    }
-                } else {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections[0], GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections[0], res);
-                    }
-                }
+                doIdentifierBasedQueryNoIdentifierAddition(identifiers, queryPack, GSI, res, projections);
             } else {
                 resultHandler.handle(Future.succeededFuture(cacheRes.result()));
             }
+        });
+    }
+
+    private JsonObject sumGrouping(List<E> result, AggregateFunction aggregateFunction, String field) {
+        return performGroupingAndSorting(result, aggregateFunction, (items, groupingConfigurations) -> {
+            if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
+            GroupingConfiguration levelOne = groupingConfigurations.get(0);
+            GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
+            GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
+
+            if (levelOne != null && levelTwo == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))));
+            } else if (levelOne != null && levelThree == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo),
+                                        summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item)))));
+            } else if (levelThree != null) {
+                //noinspection ConstantConditions
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo),
+                                        groupingBy(item -> calculateGroupingKey(item, levelThree),
+                                                summingDouble(item -> db.extractValueAsDouble(db.checkAndGetField(field), item))))));
+            }
+
+            throw new IllegalArgumentException();
         });
     }
 
@@ -583,31 +554,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                         resultHandler.handle(Future.failedFuture("Could not remoteRead all records..."));
                     } else {
                         JsonObject count = aggregateFunction.hasGrouping() ?
-                                performGroupingAndSorting(allResult.result(), aggregateFunction, (items, groupingConfigurations) -> {
-                                    if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
-                                    GroupingConfiguration levelOne = groupingConfigurations.get(0);
-                                    GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
-                                    GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
-
-                                    if (levelOne != null && levelTwo == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        counting()));
-                                    } else if (levelOne != null && levelThree == null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                counting())));
-                                    } else if (levelThree != null) {
-                                        return items.parallelStream()
-                                                .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
-                                                        groupingBy(item -> calculateGroupingKey(item, levelTwo),
-                                                                groupingBy(item -> calculateGroupingKey(item, levelThree),
-                                                                        counting()))));
-                                    }
-
-                                    throw new IllegalArgumentException();
-                                }) :
+                                countGrouping(allResult.result(), aggregateFunction) :
                                 new JsonObject().put("count", allResult.result().size());
 
                         setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, count.encode(), resultHandler);
@@ -620,22 +567,39 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                         .distinct()
                         .toArray(String[]::new);
 
-                if (identifiers.isEmpty()) {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(queryPack, projections, GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(queryPack, projections, res);
-                    }
-                } else {
-                    if (GSI != null) {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections, GSI, res);
-                    } else {
-                        db.readAllWithoutPagination(identifiers.getString("hash"), queryPack, projections, res);
-                    }
-                }
+                doIdentifierBasedQueryNoIdentifierAddition(identifiers, queryPack, GSI, res, projections);
             } else {
                 resultHandler.handle(Future.succeededFuture(cacheRes.result()));
             }
+        });
+    }
+
+    private JsonObject countGrouping(List<E> result, AggregateFunction aggregateFunction) {
+        return performGroupingAndSorting(result, aggregateFunction, (items, groupingConfigurations) -> {
+            if (groupingConfigurations.size() > 3) throw new IllegalArgumentException("GroupBy size of three is max!");
+            GroupingConfiguration levelOne = groupingConfigurations.get(0);
+            GroupingConfiguration levelTwo = groupingConfigurations.size() > 1 ? groupingConfigurations.get(1) : null;
+            GroupingConfiguration levelThree = groupingConfigurations.size() > 2 ? groupingConfigurations.get(2) : null;
+
+            if (levelOne != null && levelTwo == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                counting()));
+            } else if (levelOne != null && levelThree == null) {
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo),
+                                        counting())));
+            } else if (levelThree != null) {
+                //noinspection ConstantConditions
+                return items.parallelStream()
+                        .collect(groupingBy(item -> calculateGroupingKey(item, levelOne),
+                                groupingBy(item -> calculateGroupingKey(item, levelTwo),
+                                        groupingBy(item -> calculateGroupingKey(item, levelThree),
+                                                counting()))));
+            }
+
+            throw new IllegalArgumentException();
         });
     }
 

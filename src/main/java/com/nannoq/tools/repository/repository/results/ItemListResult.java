@@ -8,8 +8,10 @@ import javax.annotation.Nonnull;
 import java.util.List;
 
 /**
- * User: anders
- * Date: 13.11.17 15:43
+ * This class defines a container for the result of an index operation.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class ItemListResult<K extends ETagable & Model> {
     private int count;

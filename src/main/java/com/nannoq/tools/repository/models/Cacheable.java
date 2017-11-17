@@ -5,7 +5,10 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * Created by anders on 28/04/2017.
+ * This class defines an interface for cacheable models.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface Cacheable {

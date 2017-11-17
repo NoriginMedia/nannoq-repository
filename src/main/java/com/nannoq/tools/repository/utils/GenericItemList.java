@@ -12,7 +12,10 @@ import java.util.List;
 import static java.util.stream.Collectors.toList;
 
 /**
- * Created by anders on 06/09/16.
+ * This class defines a generic list for items. Used for aggregation.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @DataObject(generateConverter = true)

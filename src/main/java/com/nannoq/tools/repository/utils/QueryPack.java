@@ -13,7 +13,11 @@ import java.util.Map;
 import java.util.Queue;
 
 /**
- * Created by anders on 02/01/2017.
+ * This class defines the querypack. A querypack includes the orderByQueue, the map of filterparameters to be performed,
+ * and any aggregate function.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class QueryPack<E extends ETagable & Model> {
     private String query;

@@ -15,7 +15,10 @@ import io.vertx.core.json.JsonObject;
 import java.io.IOException;
 
 /**
- * Created by anders on 07/12/2016.
+ * This class defines an deserializer for Jackson for the S3Link class.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class S3LinkDeserializer extends StdDeserializer<S3Link> {
     private static S3ClientCache clientCache;

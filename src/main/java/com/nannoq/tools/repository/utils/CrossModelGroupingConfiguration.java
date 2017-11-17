@@ -10,9 +10,13 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * This class
- * <p>
- * Created by Anders on 26.05.2017.
+ * This class defines grouping configuration for cross-model queries.
+ *
+ *  groupByUnit is the unit of grouping (DATE, INTEGER)
+ *  groupByRange is the interval in the range of grouping (10000, HOUR, DAY, MONTH, YEAR)
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class CrossModelGroupingConfiguration {
     private List<String> groupBy;

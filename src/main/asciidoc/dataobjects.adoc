@@ -4,7 +4,7 @@
 == GenericItemList
 
 ++++
- Created by anders on 06/09/16.
+ This class defines a generic list for items. Used for aggregation.
 ++++
 '''
 
@@ -22,7 +22,7 @@
 == ValidationError
 
 ++++
- Created by anders on 08/12/2016.
+ This class defines helpers for Model operations.
 ++++
 '''
 

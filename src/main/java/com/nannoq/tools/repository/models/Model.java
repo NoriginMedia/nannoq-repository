@@ -11,14 +11,10 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * File: Model
- * Project: gcm-backend
- * Package: com.noriginmedia.norigintube.model.utils
- * <p>
- * This interface
+ * This class defines the model interface which includes sanitation, validation and json representations.
  *
- * @author anders
- * @version 4/6/16
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface Model {

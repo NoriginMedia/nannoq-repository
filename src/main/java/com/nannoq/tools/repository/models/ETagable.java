@@ -3,16 +3,11 @@ package com.nannoq.tools.repository.models;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.Map;
-
 /**
- * File: ETagable
- * Project: gcm-backend
- * Package: com.noriginmedia.norigintube.model.utils
- * <p>
- * This class
+ * This class defines an interface for models that operate on etags.
  *
- * @author anders
- * @version 4/6/16
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface ETagable {

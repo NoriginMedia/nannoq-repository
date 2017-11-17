@@ -20,7 +20,10 @@ import org.apache.http.HttpHeaders;
 import java.io.File;
 
 /**
- * Created by anders on 16/01/2017.
+ * This class defines an interface for models that store content.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public interface CachedContent {
     Logger logger = LoggerFactory.getLogger(CachedContent.class.getSimpleName());

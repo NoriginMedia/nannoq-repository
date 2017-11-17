@@ -4,8 +4,10 @@ import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 
 /**
- * User: anders
- * Date: 13.11.17 20:59
+ * This class defines a container for the result of an Update operation.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class UpdateResult<K extends ETagable & Model> {
     private final K item;

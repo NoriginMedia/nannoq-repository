@@ -10,7 +10,10 @@ import io.vertx.core.json.JsonObject;
 import java.util.List;
 
 /**
- * Created by anders on 11/03/2017.
+ * This interface declares a contract for the internal facing repository services.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @VertxGen(concrete = false)
 public interface InternalRepositoryService<T> {

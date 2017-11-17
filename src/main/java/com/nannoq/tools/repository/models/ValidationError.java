@@ -8,7 +8,10 @@ import java.util.Calendar;
 import java.util.Date;
 
 /**
- * Created by anders on 08/12/2016.
+ * This class defines helpers for Model operations.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @DataObject(generateConverter = true)
 public class ValidationError {

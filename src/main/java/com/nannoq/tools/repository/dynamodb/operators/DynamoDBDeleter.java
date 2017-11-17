@@ -28,6 +28,12 @@ import java.util.List;
 
 import static java.util.stream.Collectors.toList;
 
+/**
+ * This class defines the deletion operations for the DynamoDBRepository.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBDeleter.class.getSimpleName());
 

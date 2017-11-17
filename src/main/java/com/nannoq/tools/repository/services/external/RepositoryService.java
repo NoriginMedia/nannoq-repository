@@ -11,7 +11,10 @@ import io.vertx.core.logging.LoggerFactory;
 import java.util.List;
 
 /**
- * Created by anders on 11/03/2017.
+ * This interface declares a contract for the public facing repository services, with standardized event messages.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public interface RepositoryService<T> {
     @GenIgnore

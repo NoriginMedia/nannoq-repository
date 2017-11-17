@@ -51,7 +51,10 @@ import java.util.stream.IntStream;
 import static java.util.stream.Collectors.toList;
 
 /**
- * Created by anders on 19/08/16.
+ * This class defines DynamoDBRepository class. It handles almost all cases of use with the DynamoDB of AWS.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @SuppressWarnings({"Convert2MethodRef", "Duplicates"})
 public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cacheable>

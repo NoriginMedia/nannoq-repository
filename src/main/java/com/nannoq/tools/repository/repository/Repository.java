@@ -29,7 +29,11 @@ import static java.util.AbstractMap.SimpleEntry;
 import static java.util.stream.Collectors.toList;
 
 /**
- * Created by anders on 05/08/16.
+ * The repository interface is the base of the Repository tools. It defines a contract for all repositories and contains
+ * standardized logic.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @SuppressWarnings("unused")
 public interface Repository<E extends ETagable & Model> {

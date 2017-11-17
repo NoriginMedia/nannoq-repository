@@ -5,7 +5,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.vertx.codegen.annotations.Fluent;
 
 /**
- * Created by anders on 12/09/16.
+ * This class defines the interface for models that interact with the DynamoDBRepository.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface DynamoDBModel {

@@ -9,7 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Created by anders on 14/01/2017.
+ * This class defines aggregation functions.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public enum AggregateFunctions {
     MIN,

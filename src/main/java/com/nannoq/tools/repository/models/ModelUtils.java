@@ -4,14 +4,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * File: ModelUtils
- * Project: data-aggregator
- * Package: com.noriginmedia.norigintube
- * <p>
- * This class
+ * This class defines helpers for Model operations.
  *
- * @author anders
- * @version 3/4/16
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class ModelUtils {
     public static String hashString(String stringToHash) throws NoSuchAlgorithmException {

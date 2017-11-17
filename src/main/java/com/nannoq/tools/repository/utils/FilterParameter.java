@@ -10,7 +10,10 @@ import io.vertx.core.logging.LoggerFactory;
 import javax.annotation.Nonnull;
 
 /**
- * Created by anders on 09/11/2016.
+ * This class defines the operation to be performed on a specific field, with OR and AND types included.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class FilterParameter<E extends Model> {
     private String field;

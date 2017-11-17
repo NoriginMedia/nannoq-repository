@@ -15,6 +15,12 @@ import java.util.Arrays;
 import static com.nannoq.tools.repository.repository.Repository.INCREMENTATION.ADDITION;
 import static com.nannoq.tools.repository.repository.Repository.INCREMENTATION.SUBTRACTION;
 
+/**
+ * This class defines the update operations for the DynamoDBRepository.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBUpdater.class.getSimpleName());
 
@@ -48,16 +54,19 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
         }
     }
 
-    private boolean doCrementation(E record, Field field, Repository.INCREMENTATION direction) throws IllegalAccessException {
+    private boolean doCrementation(E record, Field field, Repository.INCREMENTATION direction)
+            throws IllegalAccessException {
         if (field.getType() == Long.class) {
             switch (direction) {
                 case ADDITION:
                     field.set(record, ((Long) field.get(record)) + 1L);
+
                     break;
                 case SUBTRACTION:
                     if (((Long) field.get(record)) != 0L) {
                         field.set(record, ((Long) field.get(record)) - 1L);
                     }
+
                     break;
             }
 
@@ -66,11 +75,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.set(record, ((Integer) field.get(record)) + 1L);
+
                     break;
                 case SUBTRACTION:
                     if (((Integer) field.get(record)) != 0L) {
                         field.set(record, ((Integer) field.get(record)) - 1L);
                     }
+
                     break;
             }
 
@@ -79,11 +90,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.set(record, ((Short) field.get(record)) + 1L);
+
                     break;
                 case SUBTRACTION:
                     if (((Short) field.get(record)) != 0L) {
                         field.set(record, ((Short) field.get(record)) - 1L);
                     }
+
                     break;
             }
 
@@ -92,11 +105,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.set(record, ((Double) field.get(record)) + 1L);
+
                     break;
                 case SUBTRACTION:
                     if (((Double) field.get(record)) != 0L) {
                         field.set(record, ((Double) field.get(record)) - 1L);
                     }
+
                     break;
             }
 
@@ -105,11 +120,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.set(record, ((Float) field.get(record)) + 1L);
+
                     break;
                 case SUBTRACTION:
                     if (((Float) field.get(record)) != 0L) {
                         field.set(record, ((Float) field.get(record)) - 1L);
                     }
+
                     break;
             }
 
@@ -118,11 +135,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.setLong(record, field.getLong(record) + 1L);
+
                     break;
                 case SUBTRACTION:
                     if (field.getLong(record) != 0L) {
                         field.setLong(record, field.getLong(record) - 1L);
                     }
+
                     break;
             }
 
@@ -131,11 +150,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.setInt(record, field.getInt(record) + 1);
+
                     break;
                 case SUBTRACTION:
                     if (field.getInt(record) != 0) {
                         field.setInt(record, field.getInt(record) - 1);
                     }
+
                     break;
             }
 
@@ -146,11 +167,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.setShort(record, ++value);
+
                     break;
                 case SUBTRACTION:
                     if (value != 0) {
                         field.setShort(record, --value);
                     }
+
                     break;
             }
 
@@ -159,11 +182,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.setDouble(record, field.getDouble(record) + 1.0);
+
                     break;
                 case SUBTRACTION:
                     if (field.getDouble(record) != 0) {
                         field.setDouble(record, field.getDouble(record) - 1.0);
                     }
+
                     break;
             }
 
@@ -172,11 +197,13 @@ public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cachea
             switch (direction) {
                 case ADDITION:
                     field.setFloat(record, field.getFloat(record) + 1.0F);
+
                     break;
                 case SUBTRACTION:
                     if (field.getFloat(record) != 0) {
                         field.setFloat(record, field.getFloat(record) - 1.0F);
                     }
+
                     break;
             }
 

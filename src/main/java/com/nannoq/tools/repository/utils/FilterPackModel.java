@@ -3,7 +3,10 @@ package com.nannoq.tools.repository.utils;
 import java.util.List;
 
 /**
- * Created by anders on 10/02/2017.
+ * This class defines the filterpackfield attached to a specific model.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class FilterPackModel {
     private String model;

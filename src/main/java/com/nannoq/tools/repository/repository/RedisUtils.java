@@ -10,14 +10,10 @@ import io.vertx.redis.RedisOptions;
 import java.util.function.Consumer;
 
 /**
- * File: RedisUtils
- * Project: data-aggregator
- * Package: com.noriginmedia.norigintube
- * <p>
- * This class
+ * This class contains logic for get and performing retryable redis commands.
  *
- * @author anders
- * @version 3/15/16
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class RedisUtils {
     private static final Logger logger = LoggerFactory.getLogger(RedisUtils.class.getSimpleName());

@@ -26,6 +26,12 @@ import java.util.List;
 import static com.nannoq.tools.repository.repository.RedisUtils.performJedisWithRetry;
 import static java.util.stream.Collectors.toList;
 
+/**
+ * The cachemanger contains the logic for setting, removing, and replace etags.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public class ETagManager<E extends ETagable & DynamoDBModel & Model & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(CacheManager.class.getSimpleName());
 

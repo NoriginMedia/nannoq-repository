@@ -7,7 +7,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Created by anders on 08/02/2017.
+ * This class defines projection configurations for cross table queries.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class CrossTableProjection {
     private List<String> TABLES = null;

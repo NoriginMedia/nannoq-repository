@@ -27,6 +27,12 @@ import java.util.function.Function;
 
 import static java.util.stream.Collectors.toList;
 
+/**
+ * This class defines the creation operations for the DynamoDBRepository.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBCreator.class.getSimpleName());
 

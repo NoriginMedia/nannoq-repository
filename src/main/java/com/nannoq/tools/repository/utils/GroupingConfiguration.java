@@ -8,9 +8,10 @@ import java.lang.reflect.Type;
 import java.util.Date;
 
 /**
- * This class
- * <p>
- * Created by Anders on 26.05.2017.
+ * This class defines the grouping configuration for a single model, similar to the cross-model grouping configurations.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class GroupingConfiguration {
     private String groupBy;

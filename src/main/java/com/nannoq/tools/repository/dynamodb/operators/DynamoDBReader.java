@@ -34,6 +34,12 @@ import static com.nannoq.tools.repository.repository.Repository.MULTIPLE_KEY;
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
 import static java.util.stream.Collectors.toList;
 
+/**
+ * This class defines the read operations for the DynamoDBRepository.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheable> {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBReader.class.getSimpleName());
 

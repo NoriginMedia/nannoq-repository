@@ -31,6 +31,12 @@ import java.util.function.Supplier;
 import static java.util.stream.Collectors.toList;
 import static javax.cache.expiry.Duration.FIVE_MINUTES;
 
+/**
+ * The cachemanger contains the logic for setting, removing, and replace caches.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
+ */
 public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model> {
     private static final Logger logger = LoggerFactory.getLogger(CacheManager.class.getSimpleName());
 

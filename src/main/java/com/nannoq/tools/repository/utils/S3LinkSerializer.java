@@ -8,7 +8,10 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import java.io.IOException;
 
 /**
- * Created by anders on 07/12/2016.
+ * This class defines an serializer for Jackson for the S3Link class.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class S3LinkSerializer extends StdSerializer<S3Link> {
     public S3LinkSerializer() {

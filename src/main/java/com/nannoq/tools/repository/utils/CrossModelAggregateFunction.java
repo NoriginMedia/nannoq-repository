@@ -10,7 +10,11 @@ import java.util.List;
 import static java.util.stream.Collectors.toList;
 
 /**
- * Created by anders on 14/01/2017.
+ * This class defines an aggregation function with the field, the function, and any grouping parameters for using with
+ * multiple models.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 public class CrossModelAggregateFunction {
     private AggregateFunctions function;

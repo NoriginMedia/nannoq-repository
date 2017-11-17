@@ -11,7 +11,10 @@ import javax.annotation.Nonnull;
 import java.util.List;
 
 /**
- * Created by anders on 06/09/16.
+ * This class defines the ItemList. It has x amount of items controlled by the count field, a pageToken, and an etag.
+ *
+ * @author Anders Mikkelsen
+ * @version 17.11.2017
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ItemList<E extends ETagable & Model> {
