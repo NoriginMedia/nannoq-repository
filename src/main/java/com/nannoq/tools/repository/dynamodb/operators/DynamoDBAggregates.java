@@ -86,69 +86,15 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
 
     private void findItemsWithMinOfField(JsonObject identifiers, QueryPack<E> queryPack,
                                          String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {
-        AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
-        String hash = identifiers.getString("hash");
-        String field = aggregateFunction.getField();
-        String newEtagKeyPostfix = "_" + field + "_MIN";
-        String etagKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
-        String cacheKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
-        final List<GroupingConfiguration> groupingParam = queryPack.getAggregateFunction().getGroupBy();
+        performMinOrMaxAggregation(identifiers, queryPack, "MIN",
+                (r, f) -> getAllItemsWithLowestValue(r, f), projections, GSI, resultHandler);
+    }
 
-        cacheManager.getAggCache(cacheKey, cacheRes -> {
-            if (cacheRes.failed()) {
-                final Handler<AsyncResult<List<E>>> res = allResult -> {
-                    if (allResult.failed()) {
-                        resultHandler.handle(Future.failedFuture("Could not remoteRead all records..."));
-                    } else {
-                        List<E> records = allResult.result();
-
-                        if (records.size() == 0) {
-                            setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey,
-                                    new JsonObject().put("error", "Empty table!").encode(), resultHandler);
-                        } else {
-                            if (queryPack.getAggregateFunction().hasGrouping()) {
-                                List<E> minItems = getAllItemsWithLowestValue(allResult.result(), field);
-                                JsonObject aggregatedItems = calculateGroupings(aggregateFunction, minItems);
-
-                                setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, aggregatedItems.encode(), resultHandler);
-                            } else {
-                                JsonArray items = new JsonArray();
-
-                                getAllItemsWithLowestValue(records, field).stream()
-                                        .map(o -> o.toJsonFormat())
-                                        .forEach(items::add);
-
-                                setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, items.encode(), resultHandler);
-                            }
-                        }
-                    }
-                };
-
-                final String[][] projs = {projections};
-                String[] finalProjections = projections == null ? new String[]{} : projections;
-
-                calculateGroupingPageToken(groupingParam, projs, finalProjections);
-
-                String[] finalProjections2 = projs[0] == null ? new String[]{} : projs[0];
-
-                if (field != null) {
-                    if (Arrays.stream(finalProjections2).noneMatch(p -> p.equalsIgnoreCase(field))) {
-                        String[] newProjectionArray = new String[finalProjections2.length + 1];
-                        IntStream.range(0, finalProjections2.length).forEach(i -> newProjectionArray[i] = finalProjections2[i]);
-                        newProjectionArray[finalProjections2.length] = field;
-                        projs[0] = newProjectionArray;
-                    }
-                }
-
-                if (logger.isDebugEnabled()) { logger.debug("Projections: " + Arrays.toString(projs[0])); }
-
-                doIdentifierBasedQuery(identifiers, queryPack, GSI, res, projs);
-            } else {
-                resultHandler.handle(Future.succeededFuture(cacheRes.result()));
-            }
-        });
+    @SuppressWarnings("unchecked")
+    private void findItemsWithMaxOfField(JsonObject identifiers, QueryPack<E> queryPack,
+                                         String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {
+        performMinOrMaxAggregation(identifiers, queryPack, "MAX",
+                (r, f) -> getAllItemsWithHighestValue(r, f), projections, GSI, resultHandler);
     }
 
     private void doIdentifierBasedQuery(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
@@ -227,13 +173,13 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         return result;
     }
 
-    @SuppressWarnings("unchecked")
-    private void findItemsWithMaxOfField(JsonObject identifiers, QueryPack<E> queryPack,
-                                         String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {
+    private void performMinOrMaxAggregation(JsonObject identifiers, QueryPack<E> queryPack, String command,
+                                            BiFunction<List<E>, String, List<E>> valueExtractor, String[] projections,
+                                            String GSI, Handler<AsyncResult<String>> resultHandler) {
         AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
         String hash = identifiers.getString("hash");
         String field = aggregateFunction.getField();
-        String newEtagKeyPostfix = "_" + field + "_MAX";
+        String newEtagKeyPostfix = "_" + field + "_" + command;
         String etagKey = queryPack.getBaseEtagKey() +
                 newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
         String cacheKey = queryPack.getBaseEtagKey() +
@@ -259,8 +205,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                                 setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, aggregatedItems.encode(), resultHandler);
                             } else {
                                 JsonArray items = new JsonArray();
-
-                                getAllItemsWithHighestValue(records, field).stream()
+                                valueExtractor.apply(records, field).stream()
                                         .map(o -> o.toJsonFormat())
                                         .forEach(items::add);
 

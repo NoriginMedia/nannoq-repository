@@ -102,6 +102,18 @@ public class ETagManager<E extends ETagable & DynamoDBModel & Model & Cacheable>
     void removeProjectionsEtags(String hash, Future<Boolean> future) {
         String etagKeyBase = TYPE.getSimpleName() + "_" + hash + "/projections";
 
+        doEtagRemovalWithRetry(future, etagKeyBase);
+    }
+
+    void destroyEtags(String hash, Future<Boolean> future) {
+        String etagItemListHashKey = TYPE.getSimpleName() + "_" +
+                (hash != null ? hash + "_" : "") +
+                "itemListEtags";
+
+        doEtagRemovalWithRetry(future, etagItemListHashKey);
+    }
+
+    private void doEtagRemovalWithRetry(Future<Boolean> future, String etagKeyBase) {
         performJedisWithRetry(REDIS_CLIENT, in -> in.hgetall(etagKeyBase, allRes -> {
             if (allRes.failed()) {
                 future.complete(Boolean.TRUE);
@@ -112,27 +124,6 @@ public class ETagManager<E extends ETagable & DynamoDBModel & Model & Cacheable>
 
                 performJedisWithRetry(REDIS_CLIENT, inner ->
                         inner.hdelMany(etagKeyBase, itemsToRemove, manyDelRes -> {
-                            future.complete(Boolean.TRUE);
-                        }));
-            }
-        }));
-    }
-
-    void destroyEtags(String hash, Future<Boolean> future) {
-        String etagItemListHashKey = TYPE.getSimpleName() + "_" +
-                (hash != null ? hash + "_" : "") +
-                "itemListEtags";
-
-        performJedisWithRetry(REDIS_CLIENT, in -> in.hgetall(etagItemListHashKey, allRes -> {
-            if (allRes.failed()) {
-                future.complete(Boolean.TRUE);
-            } else {
-                JsonObject result = allRes.result();
-                List<String> itemsToRemove = new ArrayList<>();
-                result.iterator().forEachRemaining(item -> itemsToRemove.add(item.getKey()));
-
-                performJedisWithRetry(REDIS_CLIENT, inner ->
-                        inner.hdelMany(etagItemListHashKey, itemsToRemove, manyDelRes -> {
                             future.complete(Boolean.TRUE);
                         }));
             }

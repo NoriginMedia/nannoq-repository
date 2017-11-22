@@ -105,43 +105,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 if (logger.isDebugEnabled()) { logger.debug("Served cached version of: " + cacheId); }
             } else {
                 vertx.<E>executeBlocking(future -> {
-                    E item = null;
-
-                    try {
-                        if (range != null && db.hasRangeKey()) {
-                            long timeBefore = System.currentTimeMillis();
-
-                            preOperationTime.set(System.nanoTime() - startTime.get());
-                            item = DYNAMO_DB_MAPPER.load(TYPE, hash, range);
-                            operationTime.set(System.nanoTime() - startTime.get());
-
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
-                            }
-                        } else {
-                            DynamoDBQueryExpression<E> query =
-                                    new DynamoDBQueryExpression<>();
-                            E keyObject = TYPE.newInstance();
-                            keyObject.setHash(hash);
-                            query.setConsistentRead(true);
-                            query.setHashKeyValues(keyObject);
-                            query.setLimit(1);
-
-                            long timeBefore = System.currentTimeMillis();
-
-                            preOperationTime.set(System.nanoTime() - startTime.get());
-                            List<E> items = DYNAMO_DB_MAPPER.query(TYPE, query);
-                            operationTime.set(System.nanoTime() - startTime.get());
-
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
-                            }
-
-                            if (!items.isEmpty()) item = items.get(0);
-                        }
-                    } catch (Exception e) {
-                        logger.error(e + " : " + e.getMessage() + " : " + Arrays.toString(e.getStackTrace()));
-                    }
+                    E item = fetchItem(startTime, preOperationTime, operationTime, hash, range, true);
 
                     if (item != null && cacheManager.isObjectCacheAvailable()) {
                         cacheManager.replaceObjectCache(cacheBase, item, future, new String[]{});
@@ -204,44 +168,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 if (logger.isDebugEnabled()) { logger.debug("Served cached version of: " + cacheId); }
             } else {
                 vertx.<E>executeBlocking(future -> {
-                    E item = null;
-
-                    try {
-                        if (range != null && db.hasRangeKey()) {
-                            long timeBefore = System.currentTimeMillis();
-
-                            preOperationTime.set(System.nanoTime() - startTime.get());
-                            item = DYNAMO_DB_MAPPER.load(TYPE, hash, range);
-                            operationTime.set(System.nanoTime() - preOperationTime.get());
-
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
-                            }
-                        } else {
-                            DynamoDBQueryExpression<E> query =
-                                    new DynamoDBQueryExpression<>();
-                            E keyObject = TYPE.newInstance();
-                            keyObject.setHash(hash);
-                            query.setConsistentRead(consistent);
-                            query.setHashKeyValues(keyObject);
-                            query.setLimit(1);
-                            setProjectionsOnQueryExpression(query, projections);
-
-                            long timeBefore = System.currentTimeMillis();
-
-                            preOperationTime.set(System.nanoTime() - startTime.get());
-                            List<E> items = DYNAMO_DB_MAPPER.query(TYPE, query);
-                            operationTime.set(System.nanoTime() - preOperationTime.get());
-
-                            if (logger.isDebugEnabled()) {
-                                logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
-                            }
-
-                            if (!items.isEmpty()) item = items.get(0);
-                        }
-                    } catch (Exception e) {
-                        logger.error(e + " : " + e.getMessage() + " : " + Arrays.toString(e.getStackTrace()));
-                    }
+                    E item = fetchItem(startTime, preOperationTime, operationTime, hash, range, consistent);
 
                     if (item != null) {
                         item.generateAndSetEtag(new ConcurrentHashMap<>());
@@ -282,6 +209,62 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 });
             }
         });
+    }
+
+    private E fetchItem(AtomicLong startTime, AtomicLong preOperationTime, AtomicLong operationTime,
+                        String hash, String range, boolean consistent) {
+        try {
+            if (range != null && db.hasRangeKey()) {
+                return fetchHashAndRangeItem(hash, range, startTime, preOperationTime, operationTime);
+            } else {
+                return fetchHashItem(hash, startTime, preOperationTime, operationTime, consistent);
+            }
+        } catch (Exception e) {
+            logger.error(e + " : " + e.getMessage() + " : " + Arrays.toString(e.getStackTrace()));
+        }
+
+        return null;
+    }
+
+    private E fetchHashAndRangeItem(String hash, String range,
+                                    AtomicLong startTime, AtomicLong preOperationTime, AtomicLong operationTime) {
+        long timeBefore = System.currentTimeMillis();
+
+        preOperationTime.set(System.nanoTime() - startTime.get());
+        E item = DYNAMO_DB_MAPPER.load(TYPE, hash, range);
+        operationTime.set(System.nanoTime() - startTime.get());
+
+        if (logger.isDebugEnabled()) {
+            logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
+        }
+
+        return item;
+    }
+
+    private E fetchHashItem(String hash, AtomicLong startTime, AtomicLong preOperationTime, AtomicLong operationTime,
+                            boolean consistent)
+            throws IllegalAccessException, InstantiationException {
+        DynamoDBQueryExpression<E> query =
+                new DynamoDBQueryExpression<>();
+        E keyObject = TYPE.newInstance();
+        keyObject.setHash(hash);
+        query.setConsistentRead(consistent);
+        query.setHashKeyValues(keyObject);
+        query.setLimit(1);
+
+        long timeBefore = System.currentTimeMillis();
+
+        preOperationTime.set(System.nanoTime() - startTime.get());
+        List<E> items = DYNAMO_DB_MAPPER.query(TYPE, query);
+        operationTime.set(System.nanoTime() - startTime.get());
+
+        if (logger.isDebugEnabled()) {
+            logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
+        }
+
+        if (!items.isEmpty()) return items.get(0);
+
+        return null;
     }
 
     private void returnTimedResult(AsyncResult<E> readResult,
@@ -722,12 +705,12 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
         returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
-                startTime, preOperationTime, operationTime, postOperationTime);
+                preOperationTime, operationTime, postOperationTime);
     }
 
     private void returnTimedItemListResult(Handler<AsyncResult<ItemListResult<E>>> resultHandler, int count,
                                            String pagingToken, List<E> itemList, String[] projections,
-                                           AtomicLong startTime, AtomicLong preOperationTime, AtomicLong operationTime,
+                                           AtomicLong preOperationTime, AtomicLong operationTime,
                                            AtomicLong postOperationTime) {
         postOperationTime.set(System.nanoTime() - operationTime.get());
         final ItemListResult<E> eItemListResult = new ItemListResult<>(count, itemList, pagingToken, projections, false);
@@ -832,7 +815,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         }
 
         returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
-                startTime, preOperationTime, operationTime, postOperationTime);
+                preOperationTime, operationTime, postOperationTime);
     }
 
     private void runIllegalRangedKeyQueryAsScan(String hash, QueryPack<E> queryPack,
@@ -926,7 +909,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
         returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
-                startTime, preOperationTime, operationTime, postOperationTime);
+                preOperationTime, operationTime, postOperationTime);
     }
 
     private void runRootQuery(Boolean multiple, JsonObject identifiers, String hash,
@@ -1017,7 +1000,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
         returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
-                startTime, preOperationTime, operationTime, postOperationTime);
+                preOperationTime, operationTime, postOperationTime);
     }
 
     private void rootRootQuery(QueryPack<E> queryPack, String GSI, String pageToken, String[] projections,
@@ -1089,7 +1072,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
         returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
-                startTime, preOperationTime, operationTime, postOperationTime);
+                preOperationTime, operationTime, postOperationTime);
     }
 
     @SuppressWarnings("Duplicates")
@@ -1269,6 +1252,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         readAllWithoutPagination(identifier, queryPack, null, resultHandler);
     }
 
+    @SuppressWarnings("unused")
     public void readAllWithoutPagination(QueryPack<E> queryPack, String[] projections,
                                          Handler<AsyncResult<List<E>>> resultHandler) {
         readAllWithoutPagination(queryPack, projections, null, resultHandler);
@@ -1340,6 +1324,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         });
     }
 
+    @SuppressWarnings("WeakerAccess")
     public void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, String[] projections,
                                          Handler<AsyncResult<List<E>>> resultHandler) {
         readAllWithoutPagination(identifier, queryPack, projections, null, resultHandler);

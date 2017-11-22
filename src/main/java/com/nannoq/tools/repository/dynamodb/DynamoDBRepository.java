@@ -64,7 +64,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     public static final String PAGINATION_INDEX = "PAGINATION_INDEX";
 
     protected final Vertx vertx;
-    private final String COLLECTION;
     private final Class<E> TYPE;
     private String HASH_IDENTIFIER;
     private String IDENTIFIER;
@@ -91,7 +90,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     private Map<String, Field> fieldMap = new ConcurrentHashMap<>();
     private Map<String, Type> typeMap = new ConcurrentHashMap<>();
-    private Map<String, JsonObject> GSI_KEY_MAP;
 
     @SuppressWarnings("unchecked")
     public DynamoDBRepository(Class<E> type, JsonObject appConfig) {
@@ -111,9 +109,11 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                 .map(table -> table.tableName())
                 .findFirst();
 
+        String COLLECTION;
+
         if (tableName.isPresent() || Arrays.stream(TYPE.getDeclaredAnnotations())
                 .anyMatch(a -> a instanceof DynamoDBDocument)) {
-            this.COLLECTION = tableName.orElseGet(() ->
+            COLLECTION = tableName.orElseGet(() ->
                     type.getSimpleName().substring(0, 1).toLowerCase() + type.getSimpleName().substring(1) + "s");
             this.REDIS_CLIENT = RedisUtils.getRedisClient(Vertx.currentContext().owner(), appConfig);
         } else {
@@ -127,7 +127,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         this.cacheManager = new CacheManager<>(type, vertx, eTagManager);
 
         setHashAndRange(type);
-        this.GSI_KEY_MAP = setGsiKeys(type);
+        Map<String, JsonObject> GSI_KEY_MAP = setGsiKeys(type);
         cacheManager.createCaches();
 
         this.parameters = new DynamoDBParameters<>(TYPE, this, HASH_IDENTIFIER, IDENTIFIER, PAGINATION_IDENTIFIER);
@@ -171,7 +171,8 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     public static DynamoDBMapper getS3DynamoDbMapper() {
         synchronized (SYNC_MAPPER_OBJECT) {
             if (DYNAMO_DB_MAPPER == null) {
-                setMapper(Vertx.currentContext() == null ? null : Vertx.currentContext().config());
+                setMapper(Objects.requireNonNull(Vertx.currentContext() == null ?
+                        null : Vertx.currentContext().config()));
             }
         }
 

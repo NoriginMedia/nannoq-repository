@@ -17,6 +17,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
+import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.serviceproxy.ServiceException;
 
 import javax.cache.CacheException;
@@ -175,7 +176,9 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
     @SuppressWarnings("unchecked")
     public void checkItemListCache(String cacheId, String[] projections,
                                    Handler<AsyncResult<ItemList<E>>> resultHandler) {
-        if (logger.isDebugEnabled()) { logger.debug("Checking Item List Cache"); }
+        if (logger.isDebugEnabled()) {
+            logger.debug("Checking Item List Cache");
+        }
 
         if (isItemListCacheAvailable()) {
             AtomicBoolean completeOrTimeout = new AtomicBoolean();
@@ -377,143 +380,27 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 String shortCacheId = shortCacheIdSupplier.apply(record);
                 String cacheId = cacheIdSupplier.apply(record);
 
-                Future<Boolean> replaceFirst = Future.future();
-                vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                    if (!replaceFirst.isComplete()) {
-                        objectCache.removeAsync(cacheId);
+                Future<Boolean> rFirst = Future.future();
+                replaceTimeoutHandler(cacheId, rFirst);
+                replace(rFirst, cacheId, record.toJsonString());
 
-                        replaceFirst.tryComplete(Boolean.TRUE);
-
-                        logger.error("Cache timeout!");
-                    }
-
-                    future.complete();
-                }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
-
-                objectCache.putAsync(cacheId, record.toJsonString(), expiryPolicy).andThen(new ExecutionCallback<Void>() {
-                    @Override
-                    public void onResponse(Void b) {
-                        if (logger.isDebugEnabled()) {
-                            logger.debug("Cache Replaced for: " + cacheId + " is " + b);
-                        }
-
-                        replaceFirst.tryComplete(Boolean.TRUE);
-                    }
-
-                    @Override
-                    public void onFailure(Throwable throwable) {
-                        logger.error(throwable + " : " + throwable.getMessage() + " : " +
-                                Arrays.toString(throwable.getStackTrace()));
-
-                        replaceFirst.tryComplete(Boolean.TRUE);
-                    }
-                });
-
-                Future<Boolean> replaceFirstRoot = Future.future();
-                vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                    if (!replaceFirstRoot.isComplete()) {
-                        objectCache.removeAsync(cacheId);
-
-                        replaceFirstRoot.tryComplete(Boolean.TRUE);
-
-                        logger.error("Cache timeout!");
-                    }
-
-                    future.complete();
-                }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
-
-                objectCache.putAsync(shortCacheId, record.toJsonString(), expiryPolicy)
-                        .andThen(new ExecutionCallback<Void>() {
-                            @Override
-                            public void onResponse(Void b) {
-                                if (logger.isDebugEnabled()) {
-                                    logger.debug("Cache Replaced for: " + cacheId + " is " + b);
-                                }
-
-                                replaceFirstRoot.tryComplete(Boolean.TRUE);
-                            }
-
-                            @Override
-                            public void onFailure(Throwable throwable) {
-                                logger.error(throwable + " : " + throwable.getMessage() + " : " +
-                                        Arrays.toString(throwable.getStackTrace()));
-
-                                replaceFirstRoot.tryComplete(Boolean.TRUE);
-                            }
-                        });
+                Future<Boolean> rFirstRoot = Future.future();
+                replaceTimeoutHandler(shortCacheId, rFirstRoot);
+                replace(rFirstRoot, shortCacheId, record.toJsonString());
 
                 String secondaryCache = "FULL_CACHE_" + cacheId;
-                Future<Boolean> replaceSecond = Future.future();
-                vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                    if (!replaceSecond.isComplete()) {
-                        objectCache.removeAsync(secondaryCache);
+                Future<Boolean> rSecond = Future.future();
+                replaceTimeoutHandler(secondaryCache, rSecond);
+                replace(rSecond, secondaryCache, Json.encode(record));
 
-                        replaceSecond.tryComplete(Boolean.TRUE);
+                Future<Boolean> rSecondRoot = Future.future();
+                replaceTimeoutHandler(cacheId, rSecondRoot);
+                replace(rSecondRoot, "FULL_CACHE_" + shortCacheId, Json.encode(record));
 
-                        logger.error("Cache timeout!");
-                    }
+                Future<Boolean> destroyEtags = Future.future();
+                eTagManager.removeProjectionsEtags(record.getHash(), destroyEtags);
 
-                    future.complete();
-                }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
-
-                objectCache.putAsync(secondaryCache, Json.encode(record), expiryPolicy).andThen(new ExecutionCallback<Void>() {
-                    @Override
-                    public void onResponse(Void b) {
-                        if (logger.isDebugEnabled()) {
-                            logger.debug("FULL Cache Replaced for: " + cacheId + " is " + b);
-                        }
-
-                        replaceSecond.tryComplete(Boolean.TRUE);
-                    }
-
-                    @Override
-                    public void onFailure(Throwable throwable) {
-                        logger.error(throwable + " : " + throwable.getMessage() + " : " +
-                                Arrays.toString(throwable.getStackTrace()));
-
-                        replaceSecond.tryComplete(Boolean.TRUE);
-                    }
-                });
-
-                Future<Boolean> replaceSecondRoot = Future.future();
-                vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                    if (!replaceSecondRoot.isComplete()) {
-                        objectCache.removeAsync(cacheId);
-
-                        replaceSecondRoot.tryComplete(Boolean.TRUE);
-
-                        logger.error("Cache timeout!");
-                    }
-
-                    future.complete();
-                }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
-
-                objectCache.putAsync("FULL_CACHE_" + shortCacheId, Json.encode(record), expiryPolicy)
-                        .andThen(new ExecutionCallback<Void>() {
-                            @Override
-                            public void onResponse(Void b) {
-                                if (logger.isDebugEnabled()) {
-                                    logger.debug("Cache Replaced for: " + cacheId + " is " + b);
-                                }
-
-                                replaceSecondRoot.tryComplete(Boolean.TRUE);
-                            }
-
-                            @Override
-                            public void onFailure(Throwable throwable) {
-                                logger.error(throwable + " : " + throwable.getMessage() + " : " +
-                                        Arrays.toString(throwable.getStackTrace()));
-
-                                replaceSecondRoot.tryComplete(Boolean.TRUE);
-                            }
-                        });
-
-                Future<Boolean> destroyProjectionEtags = Future.future();
-                eTagManager.removeProjectionsEtags(record.getHash(), destroyProjectionEtags);
-
-                CompositeFuture.all(replaceFirst, replaceSecond,
-                        replaceFirstRoot, replaceSecondRoot,
-                        destroyProjectionEtags).setHandler(purgeRes -> {
+                CompositeFuture.all(rFirst, rSecond, rFirstRoot, rSecondRoot, destroyEtags).setHandler(purgeRes -> {
                     if (purgeRes.succeeded()) {
                         replaceFuture.complete(Boolean.TRUE);
                     } else {
@@ -533,6 +420,41 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
             purgeSecondaryCaches(resultHandler ->
                     eTagManager.destroyEtags(records.get(0).getHash(), writeFuture));
         }
+    }
+
+    private void replace(Future<Boolean> replaceFirst, String cacheId, String recordAsJson) {
+        objectCache.putAsync(cacheId, recordAsJson, expiryPolicy).andThen(new ExecutionCallback<Void>() {
+            @Override
+            public void onResponse(Void b) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Cache Replaced for: " + cacheId + " is " + b);
+                }
+
+                replaceFirst.tryComplete(Boolean.TRUE);
+            }
+
+            @Override
+            public void onFailure(Throwable throwable) {
+                logger.error(throwable + " : " + throwable.getMessage() + " : " +
+                        Arrays.toString(throwable.getStackTrace()));
+
+                replaceFirst.tryComplete(Boolean.TRUE);
+            }
+        });
+    }
+
+    private void replaceTimeoutHandler(String cacheId, Future<Boolean> replaceFirst) {
+        vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
+            if (!replaceFirst.isComplete()) {
+                objectCache.removeAsync(cacheId);
+
+                replaceFirst.tryComplete(Boolean.TRUE);
+
+                logger.error("Cache timeout!");
+            }
+
+            future.complete();
+        }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
     }
 
     public void replaceItemListCache(String content, Supplier<String> cacheIdSupplier,
@@ -560,53 +482,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                         logger.debug("Set new cache on: " + cacheId + " is " + b);
                     }
 
-                    vertx.sharedData().<String, Set<String>>getClusterWideMap(ITEM_LIST_KEY_MAP, map -> {
-                        if (map.failed()) {
-                            logger.error("Cannot set cachemap...", map.cause());
-
-                            cacheFuture.tryComplete();
-                        } else {
-                            try {
-                                String cachePartitionKey = TYPE.newInstance().getCachePartitionKey();
-
-                                map.result().get(cachePartitionKey, set -> {
-                                    if (set.failed()) {
-                                        logger.error("Unable to get TYPE id set!", set.cause());
-
-                                        cacheFuture.tryComplete();
-                                    } else {
-                                        Set<String> idSet = set.result();
-
-                                        if (idSet == null) {
-                                            idSet = new HashSet<>();
-
-                                            idSet.add(cacheId);
-
-                                            map.result().put(cachePartitionKey, idSet, setRes -> {
-                                                if (setRes.failed()) {
-                                                    logger.error("Unable to set cacheIdSet!", setRes.cause());
-                                                }
-
-                                                cacheFuture.tryComplete();
-                                            });
-                                        } else {
-                                            idSet.add(cacheId);
-
-                                            map.result().replace(cachePartitionKey, idSet, setRes -> {
-                                                if (setRes.failed()) {
-                                                    logger.error("Unable to set cacheIdSet!", setRes.cause());
-                                                }
-
-                                                cacheFuture.tryComplete();
-                                            });
-                                        }
-                                    }
-                                });
-                            } catch (InstantiationException | IllegalAccessException e) {
-                                logger.error("Unable to build partitionKey", e);
-                            }
-                        }
-                    });
+                    replaceMapValues(cacheFuture, ITEM_LIST_KEY_MAP, cacheId);
                 }
 
                 @Override
@@ -657,47 +533,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                         logger.debug("Set cache for " + cacheKey + " is " + b);
                     }
 
-                    vertx.sharedData().<String, Set<String>>getClusterWideMap(AGGREGATION_KEY_MAP, map -> {
-                        if (map.failed()) {
-                            logger.error("Cannot set cachemap...", map.cause());
-
-                            cacheIdFuture.tryComplete();
-                        } else {
-                            map.result().get(TYPE.getSimpleName(), set -> {
-                                if (set.failed()) {
-                                    logger.error("Unable to get TYPE id set!", set.cause());
-
-                                    cacheIdFuture.tryComplete();
-                                } else {
-                                    Set<String> idSet = set.result();
-
-                                    if (idSet == null) {
-                                        idSet = new HashSet<>();
-
-                                        idSet.add(cacheKey);
-
-                                        map.result().put(TYPE.getSimpleName(), idSet, setRes -> {
-                                            if (setRes.failed()) {
-                                                logger.error("Unable to set cacheIdSet!", setRes.cause());
-                                            }
-
-                                            cacheIdFuture.tryComplete();
-                                        });
-                                    } else {
-                                        idSet.add(cacheKey);
-
-                                        map.result().replace(TYPE.getSimpleName(), idSet, setRes -> {
-                                            if (setRes.failed()) {
-                                                logger.error("Unable to set cacheIdSet!", setRes.cause());
-                                            }
-
-                                            cacheIdFuture.tryComplete();
-                                        });
-                                    }
-                                }
-                            });
-                        }
-                    });
+                    replaceMapValues(cacheIdFuture, AGGREGATION_KEY_MAP, cacheKey);
                 }
 
 
@@ -722,6 +558,50 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
+    private void replaceMapValues(Future<Boolean> cacheIdFuture, String AGGREGATION_KEY_MAP, String cacheKey) {
+        vertx.sharedData().<String, Set<String>>getClusterWideMap(AGGREGATION_KEY_MAP, map -> {
+            if (map.failed()) {
+                logger.error("Cannot set cachemap...", map.cause());
+
+                cacheIdFuture.tryComplete();
+            } else {
+                map.result().get(TYPE.getSimpleName(), set -> {
+                    if (set.failed()) {
+                        logger.error("Unable to get TYPE id set!", set.cause());
+
+                        cacheIdFuture.tryComplete();
+                    } else {
+                        Set<String> idSet = set.result();
+
+                        if (idSet == null) {
+                            idSet = new HashSet<>();
+
+                            idSet.add(cacheKey);
+
+                            map.result().put(TYPE.getSimpleName(), idSet, setRes -> {
+                                if (setRes.failed()) {
+                                    logger.error("Unable to set cacheIdSet!", setRes.cause());
+                                }
+
+                                cacheIdFuture.tryComplete();
+                            });
+                        } else {
+                            idSet.add(cacheKey);
+
+                            map.result().replace(TYPE.getSimpleName(), idSet, setRes -> {
+                                if (setRes.failed()) {
+                                    logger.error("Unable to set cacheIdSet!", setRes.cause());
+                                }
+
+                                cacheIdFuture.tryComplete();
+                            });
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     public void purgeCache(Future<Boolean> future, List<E> records, Function<E, String> cacheIdSupplier) {
         if (isObjectCacheAvailable()) {
             List<Future> purgeFutures = new ArrayList<>();
@@ -734,7 +614,9 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 objectCache.removeAsync(cacheId).andThen(new ExecutionCallback<Boolean>() {
                     @Override
                     public void onResponse(Boolean b) {
-                        if (logger.isDebugEnabled()) { logger.debug("Cache Removal on " + cacheId + " success: " + b); }
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Cache Removal on " + cacheId + " success: " + b);
+                        }
 
                         purgeFirst.tryComplete(Boolean.TRUE);
                     }
@@ -773,7 +655,9 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 objectCache.removeAsync(secondaryCache).andThen(new ExecutionCallback<Boolean>() {
                     @Override
                     public void onResponse(Boolean b) {
-                        if (logger.isDebugEnabled()) { logger.debug("Full Cache Removal on " + cacheId + " success: " + b); }
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Full Cache Removal on " + cacheId + " success: " + b);
+                        }
 
                         purgeSecond.tryComplete(Boolean.TRUE);
                     }
@@ -830,77 +714,13 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 future.complete();
             }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
 
-            vertx.executeBlocking(purgeAllListCaches -> {
-                if (logger.isDebugEnabled()) { logger.debug("Now purging cache"); }
-
-                try {
-                    vertx.sharedData().<String, Set<String>>getClusterWideMap(ITEM_LIST_KEY_MAP, map -> {
-                        if (map.failed()) {
-                            logger.error("Cannot get cachemap...", map.cause());
-
-                            vertx.executeBlocking(future -> {
-                                itemListCache.clear();
-                                purgeAllListCaches.tryComplete();
-
-                                future.complete();
-                            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                        } else {
-                            try {
-                                String cachePartitionKey = TYPE.newInstance().getCachePartitionKey();
-
-                                map.result().get(cachePartitionKey, getSet -> {
-                                    if (getSet.failed()) {
-                                        logger.error("Unable to get idSet!", getSet.cause());
-
-                                        vertx.executeBlocking(future -> {
-                                            itemListCache.clear();
-                                            purgeAllListCaches.tryComplete();
-
-                                            future.complete();
-                                        }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                                    } else {
-                                        Set<String> idSet = getSet.result();
-
-                                        if (idSet != null) {
-                                            vertx.executeBlocking(future -> {
-                                                itemListCache.removeAll(getSet.result());
-
-                                                purgeAllListCaches.tryComplete();
-
-                                                future.complete();
-                                            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                                        } else {
-                                            vertx.executeBlocking(future -> {
-                                                itemListCache.clear();
-
-                                                map.result().put(cachePartitionKey, new HashSet<>(), setRes -> {
-                                                    if (setRes.failed()) {
-                                                        logger.error("Unable to clear set...", setRes.cause());
-                                                    }
-
-                                                    purgeAllListCaches.tryComplete();
-                                                });
-
-                                                future.complete();
-                                            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                                        }
-                                    }
-                                });
-                            } catch (InstantiationException | IllegalAccessException e) {
-                                logger.error("Unable to build partitionKey", e);
-                            }
-                        }
-                    });
-
-                    if (logger.isDebugEnabled()) { logger.debug("Cache cleared: " + itemListCache.size()); }
-                } catch (Exception e) {
-                    logger.error(e);
-                    logger.error("Unable to purge cache, nulling...");
-
+            purgeMap(ITEM_LIST_KEY_MAP, itemListCache, res -> {
+                if (res.failed()) {
                     itemListCache = null;
-                    purgeAllListCaches.tryComplete();
                 }
-            }, res -> itemListFuture.tryComplete());
+
+                itemListFuture.tryComplete();
+            });
         } else {
             logger.error("ItemListCache is null, recreating...");
         }
@@ -918,85 +738,104 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 future.complete();
             }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
 
-            vertx.executeBlocking(purgeAllListCaches -> {
-                if (logger.isDebugEnabled()) { logger.debug("Now purging cache"); }
-
-                try {
-                    vertx.sharedData().<String, Set<String>>getClusterWideMap(AGGREGATION_KEY_MAP, map -> {
-                        if (map.failed()) {
-                            logger.error("Cannot get cachemap...", map.cause());
-
-                            vertx.executeBlocking(future -> {
-                                aggregationCache.clear();
-
-                                purgeAllListCaches.tryComplete();
-
-                                future.complete();
-                            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                        } else {
-                            try {
-                                String cachePartitionKey = TYPE.newInstance().getCachePartitionKey();
-
-                                map.result().get(cachePartitionKey, getSet -> {
-                                    if (getSet.failed()) {
-                                        logger.error("Unable to get idSet!", getSet.cause());
-
-                                        vertx.executeBlocking(future -> {
-                                            aggregationCache.clear();
-
-                                            purgeAllListCaches.tryComplete();
-
-                                            future.complete();
-                                        }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                                    } else {
-                                        Set<String> idSet = getSet.result();
-
-                                        if (idSet != null) {
-                                            vertx.executeBlocking(future -> {
-                                                aggregationCache.removeAll(getSet.result());
-
-                                                purgeAllListCaches.tryComplete();
-
-                                                future.complete();
-                                            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                                        } else {
-                                            vertx.executeBlocking(future -> {
-                                                aggregationCache.clear();
-
-                                                map.result().put(cachePartitionKey, new HashSet<>(), setRes -> {
-                                                    if (setRes.failed()) {
-                                                        logger.error("Unable to clear set...", setRes.cause());
-                                                    }
-
-                                                    purgeAllListCaches.tryComplete();
-                                                });
-
-                                                future.complete();
-                                            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
-                                        }
-                                    }
-                                });
-                            } catch (InstantiationException | IllegalAccessException e) {
-                                logger.error("Unable to build partitionKey", e);
-                            }
-                        }
-                    });
-
-                    if (logger.isDebugEnabled()) { logger.debug("Cache cleared: " + aggregationCache.size()); }
-                } catch (Exception e) {
-                    logger.error(e);
-                    logger.error("Unable to purge cache, nulling...");
-
+            purgeMap(AGGREGATION_KEY_MAP, aggregationCache, res -> {
+                if (res.failed()) {
                     aggregationCache = null;
-                    purgeAllListCaches.tryComplete();
                 }
-            }, res -> aggregationFuture.tryComplete());
+
+                aggregationFuture.tryComplete();
+            });
         } else {
             logger.error("AggregateCache is null, recreating...");
         }
 
         CompositeFuture.any(itemListFuture, aggregationFuture).setHandler(res ->
                 resultHandler.handle(Future.succeededFuture()));
+    }
+
+    private void purgeMap(String MAP_KEY, final ICache<String, String> cache,
+                          Handler<AsyncResult<Boolean>> resultHandler) {
+        vertx.<Boolean>executeBlocking(purgeAllListCaches -> {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Now purging cache");
+            }
+
+            try {
+                vertx.sharedData().<String, Set<String>>getClusterWideMap(MAP_KEY, map -> {
+                    if (map.failed()) {
+                        logger.error("Cannot get cachemap...", map.cause());
+
+                        vertx.executeBlocking(future -> {
+                            cache.clear();
+                            purgeAllListCaches.tryComplete();
+
+                            future.complete();
+                        }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
+                    } else {
+                        try {
+                            String cachePartitionKey = TYPE.newInstance().getCachePartitionKey();
+
+                            map.result().get(cachePartitionKey, getSet ->
+                                    purgeMapContents(getSet, cache, purgeAllListCaches, cachePartitionKey, map.result()));
+                        } catch (InstantiationException | IllegalAccessException e) {
+                            logger.error("Unable to build partitionKey", e);
+
+                            purgeAllListCaches.tryFail(e);
+                        }
+                    }
+
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Cache cleared: " + cache.size());
+                    }
+                });
+            } catch (Exception e) {
+                logger.error(e);
+                logger.error("Unable to purge cache, nulling...");
+
+                purgeAllListCaches.tryFail(e);
+            }
+        }, res -> resultHandler.handle(res.map(res.result())));
+    }
+
+    private void purgeMapContents(AsyncResult<Set<String>> getSet, final ICache<String, String> cache,
+                                  Future<Boolean> purgeAllListCaches, String cachePartitionKey,
+                                  AsyncMap<String, Set<String>> result) {
+        if (getSet.failed()) {
+            logger.error("Unable to get idSet!", getSet.cause());
+
+            vertx.executeBlocking(future -> {
+                cache.clear();
+                purgeAllListCaches.tryComplete();
+
+                future.complete();
+            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
+        } else {
+            Set<String> idSet = getSet.result();
+
+            if (idSet != null) {
+                vertx.executeBlocking(future -> {
+                    cache.removeAll(getSet.result());
+
+                    purgeAllListCaches.tryComplete();
+
+                    future.complete();
+                }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
+            } else {
+                vertx.executeBlocking(future -> {
+                    cache.clear();
+
+                    result.put(cachePartitionKey, new HashSet<>(), setRes -> {
+                        if (setRes.failed()) {
+                            logger.error("Unable to clear set...", setRes.cause());
+                        }
+
+                        purgeAllListCaches.tryComplete();
+                    });
+
+                    future.complete();
+                }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -1031,7 +870,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
             if (logger.isDebugEnabled()) { logger.debug("Caches ok: " + result.result()); }
         });
     }
-    
+
     public Boolean isObjectCacheAvailable() {
         boolean available = objectCache != null;
 

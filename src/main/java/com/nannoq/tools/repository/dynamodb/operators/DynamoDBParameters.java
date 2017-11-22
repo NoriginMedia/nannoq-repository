@@ -159,6 +159,7 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
         return errors;
     }
 
+    @SuppressWarnings("Duplicates")
     DynamoDBQueryExpression<E> applyParameters(OrderByParameter peek,
                                                Map<String, List<FilterParameter<E>>> params) {
         final DynamoDBQueryExpression<E> filterExpression = new DynamoDBQueryExpression<>();
@@ -430,6 +431,7 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                 (peek == null && param.getField().equalsIgnoreCase(PAGINATION_IDENTIFIER));
     }
 
+    @SuppressWarnings("Duplicates")
     DynamoDBScanExpression applyParameters(Map<String, List<FilterParameter<E>>> params) {
         final DynamoDBScanExpression filterExpression = new DynamoDBScanExpression();
 
