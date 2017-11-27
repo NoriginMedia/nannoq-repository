@@ -4,16 +4,19 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.nannoq.tools.repository.repository.CacheManager;
-import com.nannoq.tools.repository.repository.RedisUtils;
 import com.nannoq.tools.repository.dynamodb.DynamoDBRepository;
 import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
+import com.nannoq.tools.repository.repository.CacheManager;
+import com.nannoq.tools.repository.repository.RedisUtils;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
-import com.nannoq.tools.repository.utils.*;
+import com.nannoq.tools.repository.utils.FilterParameter;
+import com.nannoq.tools.repository.utils.ItemList;
+import com.nannoq.tools.repository.utils.OrderByParameter;
+import com.nannoq.tools.repository.utils.QueryPack;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -30,8 +33,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static com.nannoq.tools.repository.repository.Repository.MULTIPLE_KEY;
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
+import static com.nannoq.tools.repository.repository.Repository.MULTIPLE_KEY;
 import static java.util.stream.Collectors.toList;
 
 /**

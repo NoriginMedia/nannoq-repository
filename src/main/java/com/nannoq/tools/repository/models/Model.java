@@ -18,7 +18,6 @@ import java.util.List;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface Model {
-    String getId();
     Model setModifiables(Model newObject);
 
     @Fluent

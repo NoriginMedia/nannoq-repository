@@ -11,14 +11,14 @@ import com.amazonaws.services.s3.model.Region;
 import com.fasterxml.jackson.core.Version;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.nannoq.tools.repository.dynamodb.operators.*;
-import com.nannoq.tools.repository.repository.CacheManager;
-import com.nannoq.tools.repository.repository.ETagManager;
-import com.nannoq.tools.repository.repository.RedisUtils;
-import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
+import com.nannoq.tools.repository.repository.CacheManager;
+import com.nannoq.tools.repository.repository.ETagManager;
+import com.nannoq.tools.repository.repository.RedisUtils;
+import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
 import com.nannoq.tools.repository.services.internal.InternalRepositoryService;
@@ -34,7 +34,6 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.log4j.Level;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -991,10 +990,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     private static void silenceDynamoDBLoggers() {
-        org.apache.log4j.Logger.getLogger("com.amazonaws").setLevel(Level.WARN);
-        org.apache.log4j.Logger.getLogger("org.apache.http").setLevel(Level.WARN);
-        org.apache.log4j.Logger.getLogger("org.apache.http.wire").setLevel(Level.WARN);
-        org.apache.log4j.Logger.getLogger("org.apache.http.headers").setLevel(Level.WARN);
         java.util.logging.Logger.getLogger("com.amazonaws").setLevel(java.util.logging.Level.WARNING);
     }
 

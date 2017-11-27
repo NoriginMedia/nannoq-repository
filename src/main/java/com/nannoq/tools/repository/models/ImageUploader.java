@@ -12,16 +12,17 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.streams.Pump;
 import io.vertx.ext.web.FileUpload;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
+import javax.imageio.*;
+import javax.imageio.metadata.IIOMetadata;
 import javax.imageio.stream.FileImageOutputStream;
+import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.Iterator;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -163,22 +164,59 @@ public interface ImageUploader {
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
-    default File imageToPng(File file) throws IOException {
+    default File imageToPng(File file) throws IOException, URISyntaxException {
         file.setReadable(true);
-        BufferedImage image = ImageIO.read(file);
-        image = convertImageToRGB(image, BufferedImage.TYPE_INT_RGB);
-        ImageWriter jpgWriter = ImageIO.getImageWritersByFormatName("jpg").next();
-        ImageWriteParam jpgWriteParam = jpgWriter.getDefaultWriteParam();
-        jpgWriteParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        jpgWriteParam.setCompressionQuality(1.0f);
 
-        ImageOutputStream outputStream = new FileImageOutputStream(file);
-        jpgWriter.setOutput(outputStream);
-        IIOImage outputImage = new IIOImage(image, null, null);
-        jpgWriter.write(null, outputImage, jpgWriteParam);
-        jpgWriter.dispose();
+        try {
+            ImageInputStream iis = ImageIO.createImageInputStream(file);
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
+            ImageReader imageReader;
+            IIOMetadata metadata = null;
+            BufferedImage image = null;
 
-        return file;
+            while (readers.hasNext()) {
+                try {
+                    imageReader = readers.next();
+                    imageReader.setInput(iis, true);
+                    metadata = imageReader.getImageMetadata(0);
+                    image = imageReader.read(0);
+
+                    break;
+                } catch (Exception e) {
+                    logger.error("Error parsing image!", e);
+                }
+            }
+
+            if (image == null) throw new IOException();
+
+            image = convertImageToRGB(image, BufferedImage.TYPE_INT_RGB);
+            ImageWriter jpgWriter = ImageIO.getImageWritersByFormatName("jpg").next();
+            ImageWriteParam jpgWriteParam = jpgWriter.getDefaultWriteParam();
+            jpgWriteParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            jpgWriteParam.setCompressionQuality(1.0f);
+
+            ImageOutputStream outputStream = new FileImageOutputStream(file);
+            jpgWriter.setOutput(outputStream);
+            IIOImage outputImage = new IIOImage(image, null, metadata);
+            jpgWriter.write(null, outputImage, jpgWriteParam);
+            jpgWriter.dispose();
+
+            return file;
+        } catch (IOException e) {
+            logger.error("Error converting image, running backup!", e);
+
+            try {
+                BufferedImage image = ImageIO.read(file);
+                image = convertImageToRGB(image, BufferedImage.TYPE_INT_RGB);
+                ImageIO.write(image, "jpg", file);
+
+                return file;
+            } catch (IOException ee) {
+                logger.error("Error converting image!", ee);
+
+                throw ee;
+            }
+        }
     }
 
     default BufferedImage convertImageToRGB(BufferedImage src, int typeIntRgb) {

@@ -2,7 +2,6 @@ package com.nannoq.tools.repository.models;
 
 import com.nannoq.tools.repository.models.utils.FilterParameterTestClass;
 import com.nannoq.tools.repository.utils.FilterParameter;
-import io.vertx.core.json.JsonArray;
 import org.junit.Before;
 import org.junit.Test;
 

@@ -26,8 +26,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import static com.nannoq.tools.repository.repository.Repository.*;
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
+import static com.nannoq.tools.repository.repository.Repository.*;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 

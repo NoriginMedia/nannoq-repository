@@ -12,11 +12,6 @@ public class FilterParameterTestClass implements Model {
     private Long viewCount;
 
     @Override
-    public String getId() {
-        return null;
-    }
-
-    @Override
     public Model setModifiables(Model newObject) {
         return null;
     }

@@ -1,11 +1,11 @@
 package com.nannoq.tools.repository.dynamodb.operators;
 
-import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.dynamodb.DynamoDBRepository;
 import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
+import com.nannoq.tools.repository.repository.Repository;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
