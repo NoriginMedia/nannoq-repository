@@ -1,7 +1,7 @@
 <Configuration>
     <Appenders>
         <RollingRandomAccessFile name="vertx_logs_file"
-                                 fileName="logs/vertx-netcompany-base.log"
+                                 fileName="logs/vertx-base.log"
                                  filePattern="log/vertx/$${date:yyyy-MM}/vertx-netcompany-base%d{MM-dd-yyyy}-%i.log.gz">
             <PatternLayout pattern="[%p] %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c{1} - %msg%n"/>
 
@@ -26,8 +26,11 @@
             <AppenderRef ref="vertx_logs_file" />
         </AsyncLogger>
 
-        <AsyncRoot level="FATAL">
+        <AsyncRoot level="DEBUG">
             <AppenderRef ref="vertx_console" />
         </AsyncRoot>
+
+        <AsyncLogger name="com.hazelcast" level="SEVERE">
+        </AsyncLogger>
     </Loggers>
 </Configuration>

@@ -328,11 +328,9 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         } catch (NoSuchFieldException | NullPointerException e) {
             if (TYPE.getSuperclass() != null && TYPE.getSuperclass() != Object.class) {
                 return getField(fieldName, TYPE.getSuperclass());
-            } else {
-                logger.error("Cannot get field " + fieldName + " from " + TYPE.getSimpleName() + "!", e);
             }
 
-            throw new UnknownError("Cannot find field!");
+            throw new UnknownError("Cannot get field " + fieldName + " from " + TYPE.getSimpleName() + "!");
         }
     }
 
@@ -493,8 +491,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
                 return field;
             } else {
-                logger.error("Not an incrementable value!");
-
                 throw new IllegalArgumentException("Not an incrementable field!");
             }
         } catch (NoSuchFieldException | NullPointerException e) {
@@ -535,8 +531,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
                 return field;
             } else {
-                logger.error("Not an incrementable value!");
-
                 throw new IllegalArgumentException("Not an incrementable field!");
             }
         } catch (NoSuchFieldException e) {
@@ -568,8 +562,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
             return hasField || hasField(klazz.getSuperclass(), key);
         } catch (NoSuchFieldException | NullPointerException e) {
-            logger.error("No such field!", e);
-
             return false;
         }
     }
@@ -631,8 +623,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         } catch (NoSuchFieldException | NullPointerException | IllegalAccessException e) {
             if (object.getClass().getSuperclass() != null && object.getClass().getSuperclass() != Object.class) {
                 return getIndexValue(alternateIndex, object, object.getClass().getSuperclass());
-            } else {
-                logger.error("Cannot find field!", e);
             }
         }
 
@@ -670,8 +660,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         } catch (NoSuchFieldException | NullPointerException | IllegalAccessException e) {
             if (klazz.getSuperclass() != null && klazz.getSuperclass() != Object.class) {
                 return getIndexValue(alternateIndex, object, klazz.getSuperclass());
-            } else {
-                logger.error("Cannot find field!", e);
             }
         }
 
@@ -723,7 +711,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                     return new AttributeValue().withN(String.valueOf(value));
                 }
             } catch (NumberFormatException nfe) {
-                logger.error("Cannot rceate attribute!", nfe);
+                logger.error("Cannot recreate attribute!", nfe);
             }
 
             return new AttributeValue().withN(valueAsString);

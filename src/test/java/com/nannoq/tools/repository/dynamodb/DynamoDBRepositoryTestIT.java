@@ -27,6 +27,7 @@ package com.nannoq.tools.repository.dynamodb;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsyncClient;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
+import com.hazelcast.config.Config;
 import com.nannoq.tools.repository.dynamodb.model.TestModel;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
@@ -36,14 +37,13 @@ import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
 import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 import org.junit.runner.RunWith;
 import redis.embedded.RedisServer;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Map;
 
@@ -61,19 +61,26 @@ public class DynamoDBRepositoryTestIT {
             .put("dynamo_endpoint", System.getProperty("dynamo.endpoint"))
             .put("redis_host", System.getProperty("redis.endpoint"))
             .put("dynamo_db_iam_id", "someTestId")
-            .put("dynamo_db_iam_key", "someTestKey");
+            .put("dynamo_db_iam_key", "someTestKey")
+            .put("content_bucket", "someName");
 
-    private Vertx vertx;
+    private final TestModel nonNullTestModel = new TestModel()
+            .setSomeStringOne("testString");
+
+    private static Vertx vertx;
     private RedisServer redisServer;
     private DynamoDBRepository<TestModel> testModelDynamoDBRepository;
     private final String tableName = TestModel.class.getAnnotation(DynamoDBTable.class).tableName();
     private final Map<String, Class> testMap = Collections.singletonMap(tableName, TestModel.class);
 
-    @Before
-    public void setUp(TestContext testContext) throws Exception {
+    @BeforeClass
+    public static void setUpClass(TestContext testContext) {
         Async async = testContext.async();
 
-        ClusterManager mgr = new HazelcastClusterManager();
+        Config hzConfig = new Config() ;
+        hzConfig.setProperty( "hazelcast.logging.type", "log4j2" );
+        HazelcastClusterManager mgr = new HazelcastClusterManager();
+        mgr.setConfig(hzConfig);
         VertxOptions options = new VertxOptions().setClusterManager(mgr);
 
         Vertx.clusteredVertx(options, clustered -> {
@@ -83,19 +90,18 @@ public class DynamoDBRepositoryTestIT {
                 System.exit(-1);
             } else {
                 vertx = clustered.result();
-
-                try {
-                    redisServer = new RedisServer(Integer.parseInt(System.getProperty("redis.port")));
-                    redisServer.start();
-                    DynamoDBRepository.initializeDynamoDb(config, testMap);
-                    testModelDynamoDBRepository = new DynamoDBRepository<>(vertx, TestModel.class, config);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
             }
 
             async.complete();
         });
+    }
+
+    @Before
+    public void setUp() throws Exception {
+        redisServer = new RedisServer(Integer.parseInt(System.getProperty("redis.port")));
+        redisServer.start();
+        DynamoDBRepository.initializeDynamoDb(config, testMap);
+        testModelDynamoDBRepository = new DynamoDBRepository<>(vertx, TestModel.class, config);
     }
 
     @After
@@ -107,35 +113,52 @@ public class DynamoDBRepositoryTestIT {
         testModelDynamoDBRepository = null;
         redisServer.stop();
         redisServer = null;
+    }
+
+    @AfterClass
+    public static void tearDownClass() {
         vertx.close();
     }
 
     @Test
     public void getBucketName() {
+        assertEquals("BucketName does not match Config!", config.getString("content_bucket"), DynamoDBRepository.getBucketName());
     }
 
     @Test
     public void stripGet() {
+        assertEquals("stripGet does not strip correctly!", "someStringOne", testModelDynamoDBRepository.stripGet("getSomeStringOne"));
     }
 
     @Test
     public void getField() {
+        assertNotNull("Field is null!", testModelDynamoDBRepository.getField("someStringOne"));
     }
 
-    @Test
-    public void getField1() {
+    @Test(expected = UnknownError.class)
+    public void getFieldFail() {
+        testModelDynamoDBRepository.getField("someBogusField");
     }
 
     @Test
     public void getFieldAsObject() {
+        assertNotNull("FieldAsObject is null!", testModelDynamoDBRepository.getFieldAsObject("someStringOne", nonNullTestModel));
     }
 
     @Test
     public void getFieldAsString() {
+        assertNotNull("FieldAsString is null!", testModelDynamoDBRepository.getField("someStringOne"));
+        assertEquals(testModelDynamoDBRepository.getFieldAsString("someStringOne", nonNullTestModel).getClass(), String.class);
     }
 
     @Test
     public void checkAndGetField() {
+        assertNotNull("CheckAndGetField is null!", testModelDynamoDBRepository.checkAndGetField("someLong"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void checkAndGetFieldNonIncrementable() {
+        assertNotNull("CheckAndGetField is null!", testModelDynamoDBRepository.checkAndGetField("someStringOne"));
     }
 
     @Test
