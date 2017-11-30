@@ -20,7 +20,7 @@ import static com.nannoq.tools.repository.dynamodb.model.TestModelConverter.from
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-@DynamoDBTable(tableName="feedItems")
+@DynamoDBTable(tableName="testModels")
 @DataObject(generateConverter = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {

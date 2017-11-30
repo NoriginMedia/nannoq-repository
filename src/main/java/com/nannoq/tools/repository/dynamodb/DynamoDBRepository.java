@@ -87,7 +87,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     public static final String PAGINATION_INDEX = "PAGINATION_INDEX";
 
-    protected final Vertx vertx;
+    protected Vertx vertx;
     private final Class<E> TYPE;
     private String HASH_IDENTIFIER;
     private String IDENTIFIER;
@@ -115,9 +115,14 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private Map<String, Field> fieldMap = new ConcurrentHashMap<>();
     private Map<String, Type> typeMap = new ConcurrentHashMap<>();
 
-    @SuppressWarnings("unchecked")
     public DynamoDBRepository(Class<E> type, JsonObject appConfig) {
+        this(null, type, appConfig);
+    }
+
+    @SuppressWarnings("unchecked")
+    public DynamoDBRepository(Vertx vertx, Class<E> type, JsonObject appConfig) {
         this.TYPE = type;
+        this.vertx = vertx;
 
         if (Arrays.stream(type.getClass().getAnnotations()).anyMatch(ann -> ann instanceof DynamoDBDocument)) {
             throw new DynamoDBMappingException("This type is a document definition, should not have own repository!");
@@ -139,14 +144,13 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                 .anyMatch(a -> a instanceof DynamoDBDocument)) {
             COLLECTION = tableName.orElseGet(() ->
                     type.getSimpleName().substring(0, 1).toLowerCase() + type.getSimpleName().substring(1) + "s");
-            this.REDIS_CLIENT = RedisUtils.getRedisClient(Vertx.currentContext().owner(), appConfig);
+            this.REDIS_CLIENT = RedisUtils.getRedisClient(getVertx(), appConfig);
         } else {
             logger.error("Models must include the DynamoDBTable annotation, with the tablename!");
 
             throw new IllegalArgumentException("Models must include the DynamoDBTable annotation, with the tablename");
         }
 
-        this.vertx = Vertx.currentContext().owner();
         this.eTagManager = new ETagManager<>(type, vertx, COLLECTION, this);
         this.cacheManager = new CacheManager<>(type, vertx, eTagManager);
 
@@ -162,6 +166,12 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                 PAGINATION_IDENTIFIER, GSI_KEY_MAP, parameters, cacheManager);
         this.updater = new DynamoDBUpdater<>(this);
         this.deleter = new DynamoDBDeleter<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, cacheManager);
+    }
+
+    private Vertx getVertx() {
+        if (vertx == null) vertx = Vertx.currentContext().owner();
+
+        return vertx;
     }
 
     public static String getBucketName() {
@@ -1004,7 +1014,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
             SimpleModule s3LinkModule = new SimpleModule("MyModule", new Version(1, 0, 0, null));
             s3LinkModule.addSerializer(new S3LinkSerializer());
-            s3LinkModule.addDeserializer(S3Link.class, new S3LinkDeserializer());
+            s3LinkModule.addDeserializer(S3Link.class, new S3LinkDeserializer(appConfig));
 
             Json.mapper.registerModule(s3LinkModule);
 

@@ -34,6 +34,8 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import io.vertx.codegen.annotations.Nullable;
+import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 
@@ -48,11 +50,10 @@ import java.io.IOException;
 public class S3LinkDeserializer extends StdDeserializer<S3Link> {
     private static S3ClientCache clientCache;
 
-    public S3LinkDeserializer() {
+    public S3LinkDeserializer(@Nullable JsonObject config) {
         super(S3Link.class);
 
         if (clientCache == null) {
-            JsonObject config = Vertx.currentContext() == null ? null : Vertx.currentContext().config();
             String endPoint;
 
             if (config == null) {

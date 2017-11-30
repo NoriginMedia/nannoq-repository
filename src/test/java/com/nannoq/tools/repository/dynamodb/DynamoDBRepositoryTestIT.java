@@ -25,10 +25,27 @@
 
 package com.nannoq.tools.repository.dynamodb;
 
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsyncClient;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
 import com.nannoq.tools.repository.dynamodb.model.TestModel;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.spi.cluster.ClusterManager;
+import io.vertx.ext.unit.Async;
+import io.vertx.ext.unit.TestContext;
+import io.vertx.ext.unit.junit.VertxUnitRunner;
+import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import redis.embedded.RedisServer;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -38,14 +55,59 @@ import static org.junit.Assert.*;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class DynamoDBRepositoryTest {
+@RunWith(VertxUnitRunner.class)
+public class DynamoDBRepositoryTestIT {
+    private final JsonObject config = new JsonObject()
+            .put("dynamo_endpoint", System.getProperty("dynamo.endpoint"))
+            .put("redis_host", System.getProperty("redis.endpoint"))
+            .put("dynamo_db_iam_id", "someTestId")
+            .put("dynamo_db_iam_key", "someTestKey");
+
+    private Vertx vertx;
+    private RedisServer redisServer;
+    private DynamoDBRepository<TestModel> testModelDynamoDBRepository;
+    private final String tableName = TestModel.class.getAnnotation(DynamoDBTable.class).tableName();
+    private final Map<String, Class> testMap = Collections.singletonMap(tableName, TestModel.class);
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp(TestContext testContext) throws Exception {
+        Async async = testContext.async();
+
+        ClusterManager mgr = new HazelcastClusterManager();
+        VertxOptions options = new VertxOptions().setClusterManager(mgr);
+
+        Vertx.clusteredVertx(options, clustered -> {
+            if (clustered.failed()) {
+                System.out.println("Vertx not able to cluster!");
+
+                System.exit(-1);
+            } else {
+                vertx = clustered.result();
+
+                try {
+                    redisServer = new RedisServer(Integer.parseInt(System.getProperty("redis.port")));
+                    redisServer.start();
+                    DynamoDBRepository.initializeDynamoDb(config, testMap);
+                    testModelDynamoDBRepository = new DynamoDBRepository<>(vertx, TestModel.class, config);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            async.complete();
+        });
     }
 
     @After
     public void tearDown() throws Exception {
+        final AmazonDynamoDBAsyncClient amazonDynamoDBAsyncClient = new AmazonDynamoDBAsyncClient();
+        amazonDynamoDBAsyncClient.withEndpoint(config.getString("dynamo_endpoint"));
+        amazonDynamoDBAsyncClient.listTablesAsync().get().getTableNames()
+                .forEach(amazonDynamoDBAsyncClient::deleteTable);
+        testModelDynamoDBRepository = null;
+        redisServer.stop();
+        redisServer = null;
+        vertx.close();
     }
 
     @Test
@@ -78,6 +140,10 @@ public class DynamoDBRepositoryTest {
 
     @Test
     public void hasField() {
+        final Field[] declaredFields = TestModel.class.getDeclaredFields();
+
+        assertTrue(testModelDynamoDBRepository.hasField(declaredFields, "someStringOne"));
+        assertFalse(testModelDynamoDBRepository.hasField(declaredFields, "someBogusField"));
     }
 
     @Test
