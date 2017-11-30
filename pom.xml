@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>${project.groupId}:${project.artifactId}</name>
-    <description>A collection of classes for managing JWT signing and verification on Vert.x</description>
+    <description>A collection of classes for advanced queries on multiple data sources on Vert.x</description>
     <url>https://github.com/AspiroTV/nannoq-repository</url>
 
     <licenses>
@@ -50,6 +50,7 @@
         <maven.javadoc.version>3.0.0-M1</maven.javadoc.version>
         <maven.compiler.version>3.7.0</maven.compiler.version>
         <maven.gpg.version>1.6</maven.gpg.version>
+        <maven.helper.version>3.0.0</maven.helper.version>
     </properties>
 
     <dependencies>
@@ -376,6 +377,29 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>${maven.helper.version}</version>
+
+                <executions>
+                    <execution>
+                        <id>test</id>
+                        <phase>generate-sources</phase>
+
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+
+                        <configuration>
+                            <sources>
+                                <source>${basedir}/target/test-classes/com/nannoq/tools/repository/dynamodb/model</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <artifactId>maven-source-plugin</artifactId>
                 <version>${maven.sources.version}</version>

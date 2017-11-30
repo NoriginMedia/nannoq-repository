@@ -25,6 +25,7 @@
 
 package com.nannoq.tools.repository.models;
 
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.vertx.codegen.annotations.Fluent;
@@ -38,8 +39,10 @@ import io.vertx.codegen.annotations.Fluent;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public interface DynamoDBModel {
     @JsonIgnore
+    @DynamoDBIgnore
     String getHash();
     @JsonIgnore
+    @DynamoDBIgnore
     String getRange();
 
     @Fluent

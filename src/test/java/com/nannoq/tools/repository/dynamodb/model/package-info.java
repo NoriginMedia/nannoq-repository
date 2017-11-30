@@ -23,23 +23,13 @@
  *
  */
 
-package com.nannoq.tools.repository.models;
-
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonInclude;
-
 /**
- * This class defines an interface for cacheable models.
+ * Auto-Gen Module descriptor for Vert.x
  *
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public interface Cacheable {
-    @DynamoDBIgnore
-    @JsonIgnore
-    default String getCachePartitionKey() {
-        return getClass().getSimpleName();
-    }
-}
+@ModuleGen(name = "NannoqRepositoryServicesTest", groupPackage="com.nannoq.tools.repository.dynamodb.model")
+package com.nannoq.tools.repository.dynamodb.model;
+
+import io.vertx.codegen.annotations.ModuleGen;
