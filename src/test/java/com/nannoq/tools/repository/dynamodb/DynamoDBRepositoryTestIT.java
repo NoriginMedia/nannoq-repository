@@ -31,10 +31,8 @@ import com.amazonaws.services.dynamodbv2.datamodeling.S3Link;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.hazelcast.config.Config;
 import com.nannoq.tools.repository.dynamodb.model.TestModel;
-import io.vertx.core.CompositeFuture;
-import io.vertx.core.Future;
-import io.vertx.core.Vertx;
-import io.vertx.core.VertxOptions;
+import com.nannoq.tools.repository.repository.results.CreateResult;
+import io.vertx.core.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -55,6 +53,8 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
 import static com.nannoq.tools.repository.repository.Repository.logger;
@@ -80,7 +80,7 @@ public class DynamoDBRepositoryTestIT {
             .put("content_bucket", "someName");
 
     private final Date testDate = new Date();
-    private final TestModel nonNullTestModel = new TestModel()
+    private final Supplier<TestModel> nonNullTestModel = () -> new TestModel()
             .setSomeStringOne("testString")
             .setSomeStringTwo("testStringRange")
             .setSomeLong(1L)
@@ -163,6 +163,15 @@ public class DynamoDBRepositoryTestIT {
         logger.info("Closing " + name.getMethodName());
     }
 
+    private void createXItems(int count, Handler<AsyncResult<List<CreateResult<TestModel>>>> resultHandler) {
+        final List<TestModel> items = new ArrayList<>();
+
+        IntStream.range(0, count).forEach(i ->
+                items.add((TestModel) nonNullTestModel.get().setRange(nonNullTestModel.get().getRange() + i)));
+
+        repo.batchCreate(items, resultHandler);
+    }
+
     @AfterClass
     public static void tearDownClass(TestContext testContext) {
         Async async = testContext.async();
@@ -202,13 +211,13 @@ public class DynamoDBRepositoryTestIT {
 
     @Test
     public void getFieldAsObject() {
-        assertNotNull("FieldAsObject is null!", repo.getFieldAsObject("someStringOne", nonNullTestModel));
+        assertNotNull("FieldAsObject is null!", repo.getFieldAsObject("someStringOne", nonNullTestModel.get()));
     }
 
     @Test
     public void getFieldAsString() {
         assertNotNull("FieldAsString is null!", repo.getField("someStringOne"));
-        assertEquals(repo.getFieldAsString("someStringOne", nonNullTestModel).getClass(), String.class);
+        assertEquals(repo.getFieldAsString("someStringOne", nonNullTestModel.get()).getClass(), String.class);
     }
 
     @Test
@@ -236,7 +245,7 @@ public class DynamoDBRepositoryTestIT {
 
     @Test
     public void getIndexValue() throws ParseException {
-        AttributeValue attributeValue = repo.getIndexValue("someDate", nonNullTestModel);
+        AttributeValue attributeValue = repo.getIndexValue("someDate", nonNullTestModel.get());
         DateFormat df1 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX");
         Date date = df1.parse(attributeValue.getS());
 
@@ -267,7 +276,7 @@ public class DynamoDBRepositoryTestIT {
     public void fetchNewestRecord(TestContext testContext) {
         Async async = testContext.async();
 
-        repo.create(nonNullTestModel).setHandler(res -> {
+        repo.create(nonNullTestModel.get()).setHandler(res -> {
             final TestModel testModel = res.result().getItem();
             final TestModel newest = repo.fetchNewestRecord(TestModel.class, testModel.getHash(), testModel.getRange());
 
@@ -296,7 +305,7 @@ public class DynamoDBRepositoryTestIT {
     public void incrementField(TestContext testContext) {
         Async async = testContext.async();
 
-        repo.create(nonNullTestModel).setHandler(res -> {
+        repo.create(nonNullTestModel.get()).setHandler(res -> {
             TestModel item = res.result().getItem();
             long count = item.getSomeLong();
 
@@ -319,7 +328,7 @@ public class DynamoDBRepositoryTestIT {
     public void decrementField(TestContext testContext) {
         Async async = testContext.async();
 
-        repo.create(nonNullTestModel).setHandler(res -> {
+        repo.create(nonNullTestModel.get()).setHandler(res -> {
             TestModel item = res.result().getItem();
             long count = item.getSomeLong();
 
@@ -356,7 +365,17 @@ public class DynamoDBRepositoryTestIT {
     public void readAll(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+
+            repo.readAll(allItemsRes -> {
+                testContext.assertTrue(allItemsRes.succeeded());
+                testContext.assertTrue(allItemsRes.result().size() == 100,
+                        "Actual count: " + allItemsRes.result().size());
+
+                async.complete();
+            });
+        });
     }
 
     @Test
