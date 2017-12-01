@@ -1,7 +1,6 @@
 package com.nannoq.tools.repository.dynamodb.model;
 
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBVersionAttribute;
+import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.nannoq.tools.repository.models.*;
 import io.vertx.codegen.annotations.DataObject;
@@ -14,6 +13,7 @@ import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
 import static com.nannoq.tools.repository.dynamodb.model.TestModelConverter.fromJson;
 
 /**
@@ -59,6 +59,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
         return JsonObject.mapFrom(this);
     }
 
+    @DynamoDBHashKey
     public String getSomeStringOne() {
         return someStringOne;
     }
@@ -70,6 +71,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
         return this;
     }
 
+    @DynamoDBRangeKey
     public String getSomeStringTwo() {
         return someStringTwo;
     }
@@ -81,6 +83,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
         return this;
     }
 
+    @DynamoDBIndexHashKey(globalSecondaryIndexName = "TEST_GSI")
     public String getSomeStringThree() {
         return someStringThree;
     }
@@ -103,6 +106,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
         return this;
     }
 
+    @DynamoDBIndexRangeKey(localSecondaryIndexName = PAGINATION_INDEX)
     public Date getSomeDate() {
         return someDate;
     }
@@ -114,6 +118,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
         return this;
     }
 
+    @DynamoDBIndexRangeKey(globalSecondaryIndexName = "TEST_GSI")
     public Date getSomeDateTwo() {
         return someDateTwo;
     }
@@ -126,7 +131,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     public Long getSomeLong() {
-        return someLong;
+        return someLong != null ? someLong : 0L;
     }
 
     @Fluent
@@ -137,7 +142,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     public Long getSomeLongTwo() {
-        return someLongTwo;
+        return someLongTwo != null ? someLongTwo : 0L;
     }
 
     @Fluent
@@ -148,7 +153,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     public Integer getSomeInteger() {
-        return someInteger;
+        return someInteger != null ? someInteger : 0;
     }
 
     @Fluent
@@ -159,7 +164,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     public Integer getSomeIntegerTwo() {
-        return someIntegerTwo;
+        return someIntegerTwo != null ? someIntegerTwo : 0;
     }
 
     @Fluent
@@ -170,7 +175,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     public Boolean getSomeBoolean() {
-        return someBoolean;
+        return someBoolean != null ? someBoolean : Boolean.FALSE;
     }
 
     @Fluent
@@ -181,7 +186,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     public Boolean getSomeBooleanTwo() {
-        return someBooleanTwo;
+        return someBooleanTwo != null ? someBooleanTwo : Boolean.FALSE;
     }
 
     @Fluent
@@ -310,5 +315,36 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     @Override
     public JsonObject toJsonFormat(@Nonnull String[] projections) {
         return new JsonObject(Json.encode(this));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TestModel testModel = (TestModel) o;
+
+        return Objects.equals(getSomeStringOne(), testModel.getSomeStringOne()) &&
+                Objects.equals(getSomeStringTwo(), testModel.getSomeStringTwo()) &&
+                Objects.equals(getSomeStringThree(), testModel.getSomeStringThree()) &&
+                Objects.equals(getSomeStringFour(), testModel.getSomeStringFour()) &&
+                Objects.equals(getSomeDate(), testModel.getSomeDate()) &&
+                Objects.equals(getSomeDateTwo(), testModel.getSomeDateTwo()) &&
+                Objects.equals(getSomeLong(), testModel.getSomeLong()) &&
+                Objects.equals(getSomeLongTwo(), testModel.getSomeLongTwo()) &&
+                Objects.equals(getSomeInteger(), testModel.getSomeInteger()) &&
+                Objects.equals(getSomeIntegerTwo(), testModel.getSomeIntegerTwo()) &&
+                Objects.equals(getSomeBoolean(), testModel.getSomeBoolean()) &&
+                Objects.equals(getSomeBooleanTwo(), testModel.getSomeBooleanTwo()) &&
+                Objects.equals(getDocuments(), testModel.getDocuments()) &&
+                Objects.equals(getCreatedAt(), testModel.getCreatedAt()) &&
+                Objects.equals(getUpdatedAt(), testModel.getUpdatedAt()) &&
+                Objects.equals(getVersion(), testModel.getVersion());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(someStringOne, someStringTwo, someStringThree, someStringFour, someDate, someDateTwo,
+                someLong, someLongTwo, someInteger, someIntegerTwo, someBoolean, someBooleanTwo, documents, createdAt,
+                updatedAt, version);
     }
 }

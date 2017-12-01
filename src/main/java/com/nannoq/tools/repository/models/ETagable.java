@@ -56,16 +56,20 @@ public interface ETagable {
 
             if (Collection.class.isAssignableFrom(field.getType())) {
                 try {
-                    //noinspection unchecked
-                    ((Collection) field.get(this)).forEach(o -> {
-                        final ETagable e = ((ETagable) o);
-                        final Map<String, String> stringStringMap = e.generateAndSetEtag(map);
-                        map.putAll(stringStringMap);
+                    Object object = field.get(this);
 
-                        long innerEtagCode = e.getEtag() != null ? e.getEtag().hashCode() : 12345L;
+                    if (object != null) {
+                        //noinspection unchecked
+                        ((Collection) object).forEach(o -> {
+                            final ETagable e = ((ETagable) o);
+                            final Map<String, String> stringStringMap = e.generateAndSetEtag(map);
+                            map.putAll(stringStringMap);
 
-                        etagCode.set(etagCode.get() ^ innerEtagCode);
-                    });
+                            long innerEtagCode = e.getEtag() != null ? e.getEtag().hashCode() : 12345L;
+
+                            etagCode.set(etagCode.get() ^ innerEtagCode);
+                        });
+                    }
                 } catch (IllegalAccessException e) {
                     logger.error("Cannot access collection for etag!", e);
                 }

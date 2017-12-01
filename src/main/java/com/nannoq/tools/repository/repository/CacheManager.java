@@ -447,25 +447,29 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
-    private void replace(Future<Boolean> replaceFirst, String cacheId, String recordAsJson) {
-        objectCache.putAsync(cacheId, recordAsJson, expiryPolicy).andThen(new ExecutionCallback<Void>() {
-            @Override
-            public void onResponse(Void b) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Cache Replaced for: " + cacheId + " is " + b);
+    private void replace(Future<Boolean> replaceFuture, String cacheId, String recordAsJson) {
+        if (isObjectCacheAvailable()) {
+            objectCache.putAsync(cacheId, recordAsJson, expiryPolicy).andThen(new ExecutionCallback<Void>() {
+                @Override
+                public void onResponse(Void b) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Cache Replaced for: " + cacheId + " is " + b);
+                    }
+
+                    replaceFuture.tryComplete(Boolean.TRUE);
                 }
 
-                replaceFirst.tryComplete(Boolean.TRUE);
-            }
+                @Override
+                public void onFailure(Throwable throwable) {
+                    logger.error(throwable + " : " + throwable.getMessage() + " : " +
+                            Arrays.toString(throwable.getStackTrace()));
 
-            @Override
-            public void onFailure(Throwable throwable) {
-                logger.error(throwable + " : " + throwable.getMessage() + " : " +
-                        Arrays.toString(throwable.getStackTrace()));
-
-                replaceFirst.tryComplete(Boolean.TRUE);
-            }
-        });
+                    replaceFuture.tryComplete(Boolean.FALSE);
+                }
+            });
+        } else {
+            replaceFuture.tryComplete(Boolean.FALSE);
+        }
     }
 
     private void replaceTimeoutHandler(String cacheId, Future<Boolean> replaceFirst) {
@@ -748,6 +752,8 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
             });
         } else {
             logger.error("ItemListCache is null, recreating...");
+
+            itemListFuture.tryComplete();
         }
 
         if (isAggregationCacheAvailable()) {
@@ -772,6 +778,8 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
             });
         } else {
             logger.error("AggregateCache is null, recreating...");
+
+            aggregationFuture.tryComplete();
         }
 
         CompositeFuture.any(itemListFuture, aggregationFuture).setHandler(res ->

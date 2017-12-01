@@ -48,10 +48,7 @@ import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
 import com.nannoq.tools.repository.services.internal.InternalRepositoryService;
 import com.nannoq.tools.repository.utils.*;
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Future;
-import io.vertx.core.Handler;
-import io.vertx.core.Vertx;
+import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -72,6 +69,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
+import static java.util.stream.Collectors.reducing;
 import static java.util.stream.Collectors.toList;
 
 /**
@@ -186,7 +184,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         BasicAWSCredentials creds = new BasicAWSCredentials(dynamoDBId, dynamoDBKey);
         AWSStaticCredentialsProvider statCreds = new AWSStaticCredentialsProvider(creds);
 
-        DynamoDBRepository.DYNAMO_DB_CLIENT = new AmazonDynamoDBAsyncClient(statCreds).withEndpoint(endPoint);
+        DYNAMO_DB_CLIENT = new AmazonDynamoDBAsyncClient(statCreds).withEndpoint(endPoint);
 
 //        SecretKey CONTENT_ENCRYPTION_KEY = new SecretKeySpec(
 //                DatatypeConverter.parseHexBinary(appConfig.getString("contentEncryptionKeyBase")), "PKCS5Padding");
@@ -196,8 +194,8 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 //
 //        EncryptionMaterialsProvider provider = new SymmetricStaticProvider(CONTENT_ENCRYPTION_KEY, SIGNING_KEY);
 
-        DynamoDBRepository.DYNAMO_DB_MAPPER = new DynamoDBMapper(
-                DynamoDBRepository.DYNAMO_DB_CLIENT, DynamoDBMapperConfig.DEFAULT,
+        DYNAMO_DB_MAPPER = new DynamoDBMapper(
+                DYNAMO_DB_CLIENT, DynamoDBMapperConfig.DEFAULT,
                 //new AttributeEncryptor(provider), statCreds);
                 statCreds);
     }
@@ -256,7 +254,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         hasRangeKey = !IDENTIFIER.equals("");
     }
 
-    private Map<String, JsonObject> setGsiKeys(Class<E> type) {
+    private static <E> Map<String, JsonObject> setGsiKeys(Class<E> type) {
         Method[] allMethods = getAllMethodsOnType(type);
         Map<String, JsonObject> gsiMap = new ConcurrentHashMap<>();
 
@@ -296,7 +294,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return gsiMap;
     }
 
-    private Method[] getAllMethodsOnType(Class klazz) {
+    private static Method[] getAllMethodsOnType(Class klazz) {
         Method[] methods = klazz.getDeclaredMethods();
 
         if (klazz.getSuperclass() != null && klazz.getSuperclass() != Object.class) {
@@ -306,7 +304,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return methods;
     }
 
-    public String stripGet(String string) {
+    public static String stripGet(String string) {
         String newString = string.replace("get", "");
         char c[] = newString.toCharArray();
         c[0] += 32;
@@ -769,9 +767,17 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     public E fetchNewestRecord(Class<E> type, String hash, String range) {
         if (range != null && hasRangeKey) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Loading newest with range!");
+            }
+
             return DYNAMO_DB_MAPPER.load(TYPE, hash, range);
         } else {
             try {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Loading newest by hash query!");
+                }
+
                 DynamoDBQueryExpression<E> query =
                         new DynamoDBQueryExpression<>();
                 E keyObject = type.newInstance();
@@ -809,13 +815,21 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     @Override
-    public boolean incrementField(E record, String fieldName) throws IllegalArgumentException {
-        return updater.incrementField(record, fieldName);
+    public Function<E, E> incrementField(E record, String fieldName) throws IllegalArgumentException {
+        return (r) -> {
+            updater.incrementField(record, fieldName);
+
+            return record;
+        };
     }
 
     @Override
-    public boolean decrementField(E record, String fieldName) throws IllegalArgumentException {
-        return updater.decrementField(record, fieldName);
+    public Function<E, E> decrementField(E record, String fieldName) throws IllegalArgumentException {
+        return (r) -> {
+            updater.decrementField(record, fieldName);
+
+            return record;
+        };
     }
 
     @Override
@@ -986,27 +1000,44 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return TYPE.getSimpleName();
     }
 
-    public static void initializeDynamoDb(JsonObject appConfig, Map<String, Class> collectionMap) {
+    public static Future<Void> initializeDynamoDb(JsonObject appConfig, Map<String, Class> collectionMap) {
+        Future<Void> future = Future.future();
+
+        initializeDynamoDb(appConfig, collectionMap, future.completer());
+
+        return future;
+    }
+
+    public static void initializeDynamoDb(JsonObject appConfig, Map<String, Class> collectionMap,
+                                          Handler<AsyncResult<Void>> resultHandler) {
         if (logger.isDebugEnabled()) { logger.debug("Initializing DynamoDB"); }
 
         try {
             setMapper(appConfig);
             silenceDynamoDBLoggers();
+            List<Future> futures = new ArrayList<>();
 
-            collectionMap.forEach((k, v) ->
-                    DynamoDBRepository.initialize(DynamoDBRepository.DYNAMO_DB_CLIENT, DynamoDBRepository.DYNAMO_DB_MAPPER, k, v));
+            collectionMap.forEach((k, v) -> futures.add(initialize(DYNAMO_DB_CLIENT, DYNAMO_DB_MAPPER, k, v)));
 
-            if (logger.isDebugEnabled()) { logger.debug("Preparing S3 Bucket"); }
+            CompositeFuture.all(futures).setHandler(res -> {
+                if (logger.isDebugEnabled()) { logger.debug("Preparing S3 Bucket"); }
 
-            S3BucketName = appConfig.getString("content_bucket");
+                S3BucketName = appConfig.getString("content_bucket");
 
-            SimpleModule s3LinkModule = new SimpleModule("MyModule", new Version(1, 0, 0, null));
-            s3LinkModule.addSerializer(new S3LinkSerializer());
-            s3LinkModule.addDeserializer(S3Link.class, new S3LinkDeserializer(appConfig));
+                SimpleModule s3LinkModule = new SimpleModule("MyModule", new Version(1, 0, 0, null));
+                s3LinkModule.addSerializer(new S3LinkSerializer());
+                s3LinkModule.addDeserializer(S3Link.class, new S3LinkDeserializer(appConfig));
 
-            Json.mapper.registerModule(s3LinkModule);
+                Json.mapper.registerModule(s3LinkModule);
 
-            if (logger.isDebugEnabled()) { logger.debug("DynamoDB Ready"); }
+                if (logger.isDebugEnabled()) { logger.debug("DynamoDB Ready"); }
+
+                if (res.failed()) {
+                    resultHandler.handle(Future.failedFuture(res.cause()));
+                } else {
+                    resultHandler.handle(Future.succeededFuture());
+                }
+            });
         } catch (Exception e) {
             logger.error("Unable to initialize!", e);
         }
@@ -1016,12 +1047,24 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         java.util.logging.Logger.getLogger("com.amazonaws").setLevel(java.util.logging.Level.WARNING);
     }
 
+    private static Future<Void> initialize(AmazonDynamoDBAsyncClient client, DynamoDBMapper mapper,
+                                              String COLLECTION, Class TYPE) {
+        Future<Void> future = Future.future();
+
+        initialize(client, mapper, COLLECTION, TYPE, future.completer());
+
+        return future;
+    }
+
     private static void initialize(AmazonDynamoDBAsyncClient client, DynamoDBMapper mapper,
-                                   String COLLECTION, Class TYPE) {
+                                   String COLLECTION, Class TYPE,
+                                   Handler<AsyncResult<Void>> resultHandler) {
         client.listTablesAsync(new AsyncHandler<ListTablesRequest, ListTablesResult>() {
             @Override
             public void onError(Exception e) {
                 logger.error("Cannot use this repository for creation, no connection: " + e);
+
+                resultHandler.handle(Future.failedFuture(e));
             }
 
             @Override
@@ -1032,17 +1075,23 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
                 if (tableExists) {
                     if (logger.isDebugEnabled()) { logger.debug("Table exists for: " + COLLECTION + ", doing nothing..."); }
+
+                    resultHandler.handle(Future.succeededFuture());
                 } else {
                     CreateTableRequest req = mapper.generateCreateTableRequest(TYPE)
                             .withProvisionedThroughput(new ProvisionedThroughput()
                                     .withWriteCapacityUnits(5L)
                                     .withReadCapacityUnits(5L));
 
+                    setAnyGlobalSecondaryIndexes(req, 10L, 10L);
+
                     client.createTableAsync(req, new AsyncHandler<CreateTableRequest, CreateTableResult>() {
                         @Override
                         public void onError(Exception e) {
                             logger.error(e + " : " + e.getMessage() + " : " + Arrays.toString(e.getStackTrace()));
                             if (logger.isDebugEnabled()) { logger.debug("Could not remoteCreate table for: " + COLLECTION); }
+
+                            resultHandler.handle(Future.failedFuture(e));
                         }
 
                         @Override
@@ -1050,9 +1099,39 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                             if (logger.isDebugEnabled()) { logger.debug("Table creation for: " + COLLECTION + " is success: " +
                                     createTableResult.getTableDescription()
                                             .getTableName()
+
                                             .equals(COLLECTION)); }
+                            resultHandler.handle(Future.succeededFuture());
                         }
                     });
+                }
+            }
+
+            @SuppressWarnings("SameParameterValue")
+            private void setAnyGlobalSecondaryIndexes(CreateTableRequest req,
+                                                      long readProvisioning, long writeProvisioning) {
+                @SuppressWarnings("unchecked")
+                final Map<String, JsonObject> map = setGsiKeys(TYPE);
+
+                if (map.size() > 0) {
+                    List<GlobalSecondaryIndex> gsis = new ArrayList<>();
+
+                    map.forEach((k, v) ->
+                            gsis.add(new GlobalSecondaryIndex()
+                                    .withIndexName(k)
+                                    .withProjection(new Projection()
+                                            .withProjectionType(ProjectionType.ALL))
+                                    .withKeySchema(new KeySchemaElement()
+                                            .withKeyType(KeyType.HASH)
+                                            .withAttributeName(v.getString("hash")),
+                                                    new KeySchemaElement()
+                                            .withKeyType(KeyType.RANGE)
+                                            .withAttributeName(v.getString("range")))
+                                    .withProvisionedThroughput(new ProvisionedThroughput()
+                                            .withReadCapacityUnits(readProvisioning)
+                                            .withWriteCapacityUnits(writeProvisioning))));
+
+                    req.withGlobalSecondaryIndexes(gsis);
                 }
             }
         });

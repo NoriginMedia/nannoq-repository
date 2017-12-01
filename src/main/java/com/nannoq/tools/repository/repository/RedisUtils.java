@@ -45,12 +45,22 @@ public class RedisUtils {
 
     public static RedisClient getRedisClient(Vertx vertx, JsonObject config) {
         String redisServer = config.getString("redis_host");
+        Integer redisPort = config.getInteger("redis_port");
         RedisOptions redisOptions = new RedisOptions();
         redisOptions.setHost(redisServer);
 
         if (redisServer != null && redisServer.equals("localhost")) redisOptions.setPort(6380);
+        if (redisPort != null) redisOptions.setPort(redisPort);
 
-        return RedisClient.create(vertx, redisOptions);
+        final RedisClient redisClient = RedisClient.create(vertx, redisOptions);
+
+        redisClient.info(res -> {
+            if (res.failed()) {
+                logger.error("Error getting Redis Info, are you connected?", res.cause());
+            }
+        });
+
+        return redisClient;
     }
 
     public static void performJedisWithRetry(RedisClient redisClient,

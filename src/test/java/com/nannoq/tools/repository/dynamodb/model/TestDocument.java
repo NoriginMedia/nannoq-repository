@@ -7,6 +7,8 @@ import com.nannoq.tools.repository.models.ETagable;
 import io.vertx.codegen.annotations.DataObject;
 import io.vertx.core.json.JsonObject;
 
+import java.util.Objects;
+
 import static com.nannoq.tools.repository.dynamodb.model.TestDocumentConverter.fromJson;
 
 /**
@@ -92,5 +94,23 @@ public class TestDocument implements ETagable {
     @Override
     public String generateEtagKeyIdentifier() {
         return getSomeStringOne() != null ? "data_api_testDocument_etag_" + getSomeStringOne() : "NoDocumentTag";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TestDocument that = (TestDocument) o;
+
+        return Objects.equals(getSomeStringOne(), that.getSomeStringOne()) &&
+                Objects.equals(getSomeStringTwo(), that.getSomeStringTwo()) &&
+                Objects.equals(getSomeStringThree(), that.getSomeStringThree()) &&
+                Objects.equals(getSomeStringFour(), that.getSomeStringFour()) &&
+                Objects.equals(getVersion(), that.getVersion());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(someStringOne, someStringTwo, someStringThree, someStringFour, version);
     }
 }

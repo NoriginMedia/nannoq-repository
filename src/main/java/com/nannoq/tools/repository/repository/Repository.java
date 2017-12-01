@@ -255,9 +255,9 @@ public interface Repository<E extends ETagable & Model> {
         return deleteFuture;
     }
 
-    boolean incrementField(E record, String fieldName) throws IllegalArgumentException;
+    Function<E, E> incrementField(E record, String fieldName) throws IllegalArgumentException;
 
-    boolean decrementField(E record, String fieldName) throws IllegalArgumentException;
+    Function<E, E> decrementField(E record, String fieldName) throws IllegalArgumentException;
 
     void read(JsonObject identifiers, Handler<AsyncResult<ItemResult<E>>> resultHandler);
 

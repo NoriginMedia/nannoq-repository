@@ -407,7 +407,7 @@
 
                     <execution>
                         <id>dynamodbPort</id>
-                        <phase>initialize</phase>
+                        <phase>pre-integration-test</phase>
 
                         <goals>
                             <goal>reserve-network-port</goal>
@@ -422,7 +422,7 @@
 
                     <execution>
                         <id>redisPort</id>
-                        <phase>initialize</phase>
+                        <phase>pre-integration-test</phase>
 
                         <goals>
                             <goal>reserve-network-port</goal>
@@ -593,7 +593,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <dynamo.endpoint>http://localhost:${dynamodblocal.port}</dynamo.endpoint>
-                        <redis.endpoint>http://localhost:${redis.port}</redis.endpoint>
+                        <redis.endpoint>localhost</redis.endpoint>
                         <redis.port>${redis.port}</redis.port>
                     </systemPropertyVariables>
                 </configuration>
