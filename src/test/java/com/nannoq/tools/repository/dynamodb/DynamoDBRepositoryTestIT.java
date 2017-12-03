@@ -42,6 +42,7 @@ import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
 import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
+import javafx.beans.binding.ListExpression;
 import org.junit.*;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
@@ -53,6 +54,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.function.Supplier;
@@ -167,11 +169,36 @@ public class DynamoDBRepositoryTestIT {
 
     private void createXItems(int count, Handler<AsyncResult<List<CreateResult<TestModel>>>> resultHandler) {
         final List<TestModel> items = new ArrayList<>();
+        List<Future> futures = new CopyOnWriteArrayList<>();
 
         IntStream.range(0, count).forEach(i ->
                 items.add((TestModel) nonNullTestModel.get().setRange(UUID.randomUUID().toString())));
 
-        repo.batchCreate(items, resultHandler);
+        items.forEach(item -> {
+            Future<CreateResult<TestModel>> future = Future.future();
+
+            repo.create(item, future.completer());
+
+            futures.add(future);
+
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException ignored) {}
+        });
+
+        CompositeFuture.all(futures).setHandler(res -> {
+            if (res.failed()) {
+                resultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
+                @SuppressWarnings("unchecked")
+                final List<CreateResult<TestModel>> collect = futures.stream()
+                        .map(Future::result)
+                        .map(o -> (CreateResult<TestModel>) o)
+                        .collect(toList());
+
+                resultHandler.handle(Future.succeededFuture(collect));
+            }
+        });
     }
 
     @AfterClass
@@ -352,11 +379,13 @@ public class DynamoDBRepositoryTestIT {
     @Test
     public void read(TestContext testContext) {
         Async async = testContext.async();
+        final List<Future> futureList = new CopyOnWriteArrayList<>();
 
         createXItems(100, res -> {
             testContext.assertTrue(res.succeeded());
 
             res.result().stream().parallel().forEach(cr -> {
+                final Future<Void> future = Future.future();
                 final TestModel testModel = cr.getItem();
                 final JsonObject id = new JsonObject()
                         .put("hash", testModel.getHash())
@@ -365,27 +394,35 @@ public class DynamoDBRepositoryTestIT {
                 repo.read(id, firstRead -> {
                     testContext.assertTrue(firstRead.succeeded());
 
-                    repo.read(id, secondRead -> {
-                        testContext.assertTrue(secondRead.succeeded());
-                        testContext.assertTrue(secondRead.result().isCacheHit());
+                    if (firstRead.succeeded()) {
+                        repo.read(id, secondRead -> {
+                            testContext.assertTrue(secondRead.succeeded());
+                            testContext.assertTrue(secondRead.result().isCacheHit());
 
-                        async.complete();
-                    });
+                            future.tryComplete();
+                        });
+                    } else {
+                        future.tryComplete();
+                    }
                 });
+
+                futureList.add(future);
             });
         });
 
-        async.complete();
+        CompositeFuture.all(futureList).setHandler(res -> async.complete());
     }
 
     @Test
     public void readWithConsistencyAndProjections(TestContext testContext) {
         Async async = testContext.async();
+        final List<Future> futureList = new CopyOnWriteArrayList<>();
 
         createXItems(100, res -> {
             testContext.assertTrue(res.succeeded());
 
             res.result().stream().parallel().forEach(cr -> {
+                final Future<Void> future = Future.future();
                 final TestModel testModel = cr.getItem();
                 final JsonObject id = new JsonObject()
                         .put("hash", testModel.getHash())
@@ -394,18 +431,23 @@ public class DynamoDBRepositoryTestIT {
                 repo.read(id, false, new String[]{"someLong"}, firstRead -> {
                     testContext.assertTrue(firstRead.succeeded());
 
-                    repo.read(id, false, new String[]{"someLong"}, secondRead -> {
-                        testContext.assertTrue(secondRead.succeeded());
-                        testContext.assertTrue(secondRead.result().isCacheHit());
+                    if (firstRead.succeeded()) {
+                        repo.read(id, false, new String[]{"someLong"}, secondRead -> {
+                            testContext.assertTrue(secondRead.succeeded());
+                            testContext.assertTrue(secondRead.result().isCacheHit());
 
-                        async.complete();
-                    });
+                            future.tryComplete();
+                        });
+                    } else {
+                        future.tryComplete();
+                    }
                 });
 
+                futureList.add(future);
             });
         });
 
-        async.complete();
+        CompositeFuture.all(futureList).setHandler(res -> async.complete());
     }
 
     @Test
@@ -435,7 +477,7 @@ public class DynamoDBRepositoryTestIT {
                     .put("hash", "testString");
             final FilterParameter<TestModel> fp = FilterParameter.<TestModel>builder()
                     .withKlazz(TestModel.class)
-                    .withField("someLong")
+                    .withField("someStringThree")
                     .withEq("1")
                     .build();
             final Map<String, List<FilterParameter<TestModel>>> fpList = new ConcurrentHashMap<>();
@@ -448,8 +490,6 @@ public class DynamoDBRepositoryTestIT {
                 async.complete();
             });
         });
-
-        async.complete();
     }
 
     @Test

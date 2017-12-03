@@ -232,7 +232,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     @Override
     @Fluent
     public DynamoDBModel setHash(String hash) {
-        someStringTwo = hash;
+        someStringOne = hash;
 
         return this;
     }
@@ -260,7 +260,9 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
 
     @Override
     public String generateEtagKeyIdentifier() {
-        return getSomeStringOne() != null ? "data_api_testModel_etag_" + getSomeStringOne() : "NoTestModelEtag";
+        return getSomeStringOne() != null && getSomeStringTwo() != null ?
+                "data_api_testModel_etag_" + getSomeStringOne() + "_" + getSomeStringTwo() :
+                "NoTestModelEtag";
     }
 
     @Override

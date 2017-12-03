@@ -26,6 +26,7 @@
 package com.nannoq.tools.repository.repository;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.hazelcast.cache.CacheNotExistsException;
 import com.hazelcast.cache.ICache;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.Hazelcast;
@@ -45,9 +46,14 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.serviceproxy.ServiceException;
 
+import javax.cache.Cache;
 import javax.cache.CacheException;
+import javax.cache.Caching;
+import javax.cache.configuration.CompleteConfiguration;
+import javax.cache.configuration.MutableConfiguration;
 import javax.cache.expiry.AccessedExpiryPolicy;
 import javax.cache.expiry.ExpiryPolicy;
+import javax.cache.spi.CachingProvider;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -130,12 +136,30 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         if (hzOpt.isPresent()) {
             HazelcastInstance hz = hzOpt.get();
 
-            @SuppressWarnings("UnnecessaryLocalVariable")
-            ICache<String, String> cache = hz.getCacheManager().getCache(cacheName);
+            try {
+                @SuppressWarnings("UnnecessaryLocalVariable")
+                ICache<String, String> cache = hz.getCacheManager().getCache(cacheName);
 
-            logger.info("Initialized cache: " + cache.getName() + " ok!");
+                logger.info("Initialized cache: " + cache.getName() + " ok!");
 
-            return cache;
+                return cache;
+            } catch (CacheNotExistsException cnee) {
+                CachingProvider cachingProvider = Caching.getCachingProvider();
+                CompleteConfiguration<String, String> config =
+                        new MutableConfiguration<String, String>()
+                                .setTypes(String.class, String.class)
+                                .setManagementEnabled(false)
+                                .setStatisticsEnabled(false)
+                                .setReadThrough(false)
+                                .setWriteThrough(false);
+
+                //noinspection unchecked
+                return cachingProvider.getCacheManager().createCache(cacheName, config).unwrap(ICache.class);
+            } catch (IllegalStateException ilse) {
+                logger.error("JCache not available!");
+
+                return null;
+            }
         } else {
             logger.error("Cannot find hazelcast instance!");
 

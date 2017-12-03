@@ -1101,7 +1101,14 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                                             .getTableName()
 
                                             .equals(COLLECTION)); }
-                            resultHandler.handle(Future.succeededFuture());
+
+                            waitForTableAvailable(createTableResult, res -> {
+                                if (res.failed()) {
+                                    resultHandler.handle(Future.failedFuture(res.cause()));
+                                } else {
+                                    resultHandler.handle(Future.succeededFuture());
+                                }
+                            });
                         }
                     });
                 }
@@ -1132,6 +1139,35 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                                             .withWriteCapacityUnits(writeProvisioning))));
 
                     req.withGlobalSecondaryIndexes(gsis);
+                }
+            }
+
+            private void waitForTableAvailable(CreateTableResult createTableResult,
+                                               Handler<AsyncResult<Void>> resultHandler) {
+                final String tableName = createTableResult.getTableDescription().getTableName();
+
+                final DescribeTableResult describeTableResult = client.describeTable(tableName);
+
+                if (describeTableResult.getTable().getTableStatus().equalsIgnoreCase("ACTIVE")) {
+                    resultHandler.handle(Future.succeededFuture());
+                } else {
+                    Handler<AsyncResult<Void>> resHandle = res -> {
+                        if (res.failed()) {
+                            waitForTableAvailable(createTableResult, resultHandler);
+                        } else {
+                            resultHandler.handle(Future.succeededFuture());
+                        }
+                    };
+
+                    waitForActive(tableName, resHandle);
+                }
+            }
+
+            private void waitForActive(String tableName, Handler<AsyncResult<Void>> resHandle) {
+                if (client.describeTable(tableName).getTable().getTableStatus().equals("ACTIVE")) {
+                    resHandle.handle(Future.succeededFuture());
+                } else {
+                    resHandle.handle(Future.failedFuture("Not active!"));
                 }
             }
         });
