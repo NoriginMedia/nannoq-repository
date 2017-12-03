@@ -32,6 +32,7 @@ import com.amazonaws.services.dynamodbv2.model.*;
 import com.hazelcast.config.Config;
 import com.nannoq.tools.repository.dynamodb.model.TestModel;
 import com.nannoq.tools.repository.repository.results.CreateResult;
+import com.nannoq.tools.repository.utils.FilterParameter;
 import io.vertx.core.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -51,6 +52,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.function.Supplier;
@@ -167,7 +169,7 @@ public class DynamoDBRepositoryTestIT {
         final List<TestModel> items = new ArrayList<>();
 
         IntStream.range(0, count).forEach(i ->
-                items.add((TestModel) nonNullTestModel.get().setRange(nonNullTestModel.get().getRange() + i)));
+                items.add((TestModel) nonNullTestModel.get().setRange(UUID.randomUUID().toString())));
 
         repo.batchCreate(items, resultHandler);
     }
@@ -351,12 +353,57 @@ public class DynamoDBRepositoryTestIT {
     public void read(TestContext testContext) {
         Async async = testContext.async();
 
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+
+            res.result().stream().parallel().forEach(cr -> {
+                final TestModel testModel = cr.getItem();
+                final JsonObject id = new JsonObject()
+                        .put("hash", testModel.getHash())
+                        .put("range", testModel.getRange());
+
+                repo.read(id, firstRead -> {
+                    testContext.assertTrue(firstRead.succeeded());
+
+                    repo.read(id, secondRead -> {
+                        testContext.assertTrue(secondRead.succeeded());
+                        testContext.assertTrue(secondRead.result().isCacheHit());
+
+                        async.complete();
+                    });
+                });
+            });
+        });
+
         async.complete();
     }
 
     @Test
     public void readWithConsistencyAndProjections(TestContext testContext) {
         Async async = testContext.async();
+
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+
+            res.result().stream().parallel().forEach(cr -> {
+                final TestModel testModel = cr.getItem();
+                final JsonObject id = new JsonObject()
+                        .put("hash", testModel.getHash())
+                        .put("range", testModel.getRange());
+
+                repo.read(id, false, new String[]{"someLong"}, firstRead -> {
+                    testContext.assertTrue(firstRead.succeeded());
+
+                    repo.read(id, false, new String[]{"someLong"}, secondRead -> {
+                        testContext.assertTrue(secondRead.succeeded());
+                        testContext.assertTrue(secondRead.result().isCacheHit());
+
+                        async.complete();
+                    });
+                });
+
+            });
+        });
 
         async.complete();
     }
@@ -381,6 +428,26 @@ public class DynamoDBRepositoryTestIT {
     @Test
     public void readAllWithIdentifiersAndFilterParameters(TestContext testContext) {
         Async async = testContext.async();
+
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+            final JsonObject idObject = new JsonObject()
+                    .put("hash", "testString");
+            final FilterParameter<TestModel> fp = FilterParameter.<TestModel>builder()
+                    .withKlazz(TestModel.class)
+                    .withField("someLong")
+                    .withEq("1")
+                    .build();
+            final Map<String, List<FilterParameter<TestModel>>> fpList = new ConcurrentHashMap<>();
+            fpList.put("someLong", Collections.singletonList(fp));
+
+            repo.readAll(idObject, fpList, allItemsRes -> {
+                testContext.assertTrue(allItemsRes.succeeded());
+                testContext.assertTrue(allItemsRes.result().size() == 0, "Actual: " + allItemsRes.result().size());
+
+                async.complete();
+            });
+        });
 
         async.complete();
     }
