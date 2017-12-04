@@ -5,7 +5,9 @@ nannoq-repository is a collection of repository implementations for Vert.x. All 
 ### Prerequisites
 
 Vert.x >= 3.5.0
+
 Java >= 1.8
+
 Maven
 
 ### Installing
