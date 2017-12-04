@@ -35,8 +35,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import io.vertx.codegen.annotations.Nullable;
-import io.vertx.core.Context;
-import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 
 import java.io.IOException;

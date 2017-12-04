@@ -34,7 +34,7 @@ import com.nannoq.tools.repository.models.Model;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class ItemResult<K extends ETagable & Model> {
+public class ItemResult<K extends Model> {
     private final K item;
     private final boolean cacheHit;
     private long preOperationProcessingTime;

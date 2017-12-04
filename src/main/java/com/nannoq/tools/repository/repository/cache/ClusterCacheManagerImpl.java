@@ -23,7 +23,7 @@
  *
  */
 
-package com.nannoq.tools.repository.repository;
+package com.nannoq.tools.repository.repository.cache;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.hazelcast.cache.CacheNotExistsException;
@@ -32,8 +32,6 @@ import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.nannoq.tools.repository.models.Cacheable;
-import com.nannoq.tools.repository.models.DynamoDBModel;
-import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.utils.ItemList;
 import io.vertx.core.*;
@@ -46,7 +44,6 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.AsyncMap;
 import io.vertx.serviceproxy.ServiceException;
 
-import javax.cache.Cache;
 import javax.cache.CacheException;
 import javax.cache.Caching;
 import javax.cache.configuration.CompleteConfiguration;
@@ -69,11 +66,10 @@ import static javax.cache.expiry.Duration.FIVE_MINUTES;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model> {
-    private static final Logger logger = LoggerFactory.getLogger(CacheManager.class.getSimpleName());
+public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements CacheManager<E> {
+    private static final Logger logger = LoggerFactory.getLogger(ClusterCacheManagerImpl.class.getSimpleName());
 
     private final Vertx vertx;
-
     private final Class<E> TYPE;
 
     private static boolean cachesCreated = false;
@@ -87,23 +83,19 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
     private final long CACHE_TIMEOUT_VALUE = 1000L;
     private ExpiryPolicy expiryPolicy = AccessedExpiryPolicy.factoryOf(FIVE_MINUTES).create();
 
-    private final ETagManager<E> eTagManager;
-
     private final boolean hasTypeJsonField;
 
-    public CacheManager(Class<E> type, Vertx vertx, ETagManager<E> eTagManager) {
+    public ClusterCacheManagerImpl(Class<E> type, Vertx vertx) {
         this.TYPE = type;
         this.vertx = vertx;
-        this.eTagManager = eTagManager;
         this.ITEM_LIST_KEY_MAP = TYPE.getSimpleName() + "/ITEMLIST";
         this.AGGREGATION_KEY_MAP = TYPE.getSimpleName() + "/AGGREGATION";
 
         hasTypeJsonField = Arrays.stream(type.getDeclaredAnnotations()).anyMatch(a -> a instanceof JsonTypeInfo);
-
-        createCaches();
     }
 
-    public synchronized void createCaches() {
+    @Override
+    public void initializeCache(Handler<AsyncResult<Boolean>> resultHandler) {
         if (cachesCreated) return;
 
         vertx.<Boolean>executeBlocking(future -> {
@@ -118,13 +110,13 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
 
                 future.fail(e);
             }
-        }, false, result -> {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Caches ok: " + result.result() + ", cause: " + result.cause());
-            }
-
-            if (result.succeeded()) {
+        }, false, res -> {
+            if (res.failed()) {
+                resultHandler.handle(Future.failedFuture(res.cause()));
+            } else {
                 cachesCreated = true;
+
+                resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
             }
         });
     }
@@ -167,7 +159,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @Override
     public void checkObjectCache(String cacheId, Handler<AsyncResult<E>> resultHandler) {
         if (isObjectCacheAvailable()) {
             AtomicBoolean completeOrTimeout = new AtomicBoolean();
@@ -222,7 +214,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @Override
     public void checkItemListCache(String cacheId, String[] projections,
                                    Handler<AsyncResult<ItemList<E>>> resultHandler) {
         if (logger.isDebugEnabled()) {
@@ -296,7 +288,8 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
-    public void getAggCache(String cacheKey, Handler<AsyncResult<String>> resultHandler) {
+    @Override
+    public void checkAggregationCache(String cacheKey, Handler<AsyncResult<String>> resultHandler) {
         if (isAggregationCacheAvailable()) {
             AtomicBoolean completeOrTimeout = new AtomicBoolean();
             completeOrTimeout.set(false);
@@ -340,6 +333,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
+    @Override
     public void replaceObjectCache(String cacheId, E item, Future<E> future, String[] projections) {
         if (isObjectCacheAvailable()) {
             String fullCacheContent = Json.encode(item);
@@ -417,7 +411,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @Override
     public void replaceCache(Future<Boolean> writeFuture, List<E> records,
                              Function<E, String> shortCacheIdSupplier,
                              Function<E, String> cacheIdSupplier) {
@@ -446,10 +440,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 replaceTimeoutHandler(cacheId, rSecondRoot);
                 replace(rSecondRoot, "FULL_CACHE_" + shortCacheId, Json.encode(record));
 
-                Future<Boolean> destroyEtags = Future.future();
-                eTagManager.removeProjectionsEtags(record.getHash(), destroyEtags);
-
-                CompositeFuture.all(rFirst, rSecond, rFirstRoot, rSecondRoot, destroyEtags).setHandler(purgeRes -> {
+                CompositeFuture.all(rFirst, rSecond, rFirstRoot, rSecondRoot).setHandler(purgeRes -> {
                     if (purgeRes.succeeded()) {
                         replaceFuture.complete(Boolean.TRUE);
                     } else {
@@ -460,14 +451,11 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 replaceFutures.add(replaceFuture);
             });
 
-            CompositeFuture.all(replaceFutures).setHandler(res ->
-                    purgeSecondaryCaches(resultHandler ->
-                            eTagManager.destroyEtags(records.get(0).getHash(), writeFuture)));
+            CompositeFuture.all(replaceFutures).setHandler(res -> purgeSecondaryCaches(writeFuture.completer()));
         } else {
             logger.error("ObjectCache is null, recreating...");
 
-            purgeSecondaryCaches(resultHandler ->
-                    eTagManager.destroyEtags(records.get(0).getHash(), writeFuture));
+            purgeSecondaryCaches(writeFuture.completer());
         }
     }
 
@@ -510,6 +498,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
     }
 
+    @Override
     public void replaceItemListCache(String content, Supplier<String> cacheIdSupplier,
                                      Handler<AsyncResult<Boolean>> resultHandler) {
         if (isItemListCacheAvailable()) {
@@ -561,8 +550,9 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         }
     }
 
-    public void replaceAggCache(String content, Supplier<String> cacheIdSupplier,
-                                Handler<AsyncResult<Boolean>> resultHandler) {
+    @Override
+    public void replaceAggregationCache(String content, Supplier<String> cacheIdSupplier,
+                                        Handler<AsyncResult<Boolean>> resultHandler) {
         if (isAggregationCacheAvailable()) {
             String cacheKey = cacheIdSupplier.get();
 
@@ -655,6 +645,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         });
     }
 
+    @Override
     public void purgeCache(Future<Boolean> future, List<E> records, Function<E, String> cacheIdSupplier) {
         if (isObjectCacheAvailable()) {
             List<Future> purgeFutures = new ArrayList<>();
@@ -724,10 +715,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                     }
                 });
 
-                Future<Boolean> destroyProjectionEtags = Future.future();
-                eTagManager.removeProjectionsEtags(record.getHash(), destroyProjectionEtags);
-
-                CompositeFuture.all(purgeFirst, purgeSecond, destroyProjectionEtags).setHandler(purgeRes -> {
+                CompositeFuture.all(purgeFirst, purgeSecond).setHandler(purgeRes -> {
                     if (purgeRes.succeeded()) {
                         purgeFuture.complete(Boolean.TRUE);
                     } else {
@@ -738,15 +726,11 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
                 purgeFutures.add(purgeFuture);
             });
 
-            CompositeFuture.all(purgeFutures).setHandler(res -> purgeSecondaryCaches(resultHandler -> {
-                if (records.size() > 0) {
-                    eTagManager.destroyEtags(records.get(0).getHash(), future);
-                }
-            }));
+            CompositeFuture.all(purgeFutures).setHandler(res -> purgeSecondaryCaches(future.completer()));
         } else {
             logger.error("ObjectCache is null, recreating...");
 
-            purgeSecondaryCaches(resultHandler -> eTagManager.destroyEtags(records.get(0).getHash(), future));
+            purgeSecondaryCaches(future.completer());
         }
     }
 
@@ -928,6 +912,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         });
     }
 
+    @Override
     public Boolean isObjectCacheAvailable() {
         boolean available = objectCache != null;
 
@@ -938,6 +923,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         return available;
     }
 
+    @Override
     public Boolean isItemListCacheAvailable() {
         boolean available = itemListCache != null;
 
@@ -948,6 +934,7 @@ public class CacheManager<E extends Cacheable & ETagable & DynamoDBModel & Model
         return available;
     }
 
+    @Override
     public Boolean isAggregationCacheAvailable() {
         boolean available = aggregationCache != null;
 

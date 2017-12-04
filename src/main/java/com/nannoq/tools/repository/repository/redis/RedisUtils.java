@@ -23,7 +23,7 @@
  *
  */
 
-package com.nannoq.tools.repository.repository;
+package com.nannoq.tools.repository.repository.redis;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;

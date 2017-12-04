@@ -25,7 +25,6 @@
 
 package com.nannoq.tools.repository.repository.results;
 
-import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.utils.ItemList;
 
@@ -38,7 +37,7 @@ import java.util.List;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class ItemListResult<K extends ETagable & Model> {
+public class ItemListResult<K extends Model> {
     private int count;
     private List<K> items;
     private String pageToken;

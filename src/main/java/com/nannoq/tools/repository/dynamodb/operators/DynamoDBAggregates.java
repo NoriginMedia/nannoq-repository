@@ -27,8 +27,8 @@ package com.nannoq.tools.repository.dynamodb.operators;
 
 import com.nannoq.tools.repository.dynamodb.DynamoDBRepository;
 import com.nannoq.tools.repository.models.*;
-import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
-import com.nannoq.tools.repository.repository.etag.RedisETagManagerImpl;
+import com.nannoq.tools.repository.repository.cache.CacheManager;
+import com.nannoq.tools.repository.repository.etag.ETagManager;
 import com.nannoq.tools.repository.utils.AggregateFunction;
 import com.nannoq.tools.repository.utils.GroupingConfiguration;
 import com.nannoq.tools.repository.utils.QueryPack;
@@ -66,18 +66,18 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
     private final String HASH_IDENTIFIER;
     private final String IDENTIFIER;
 
-    private final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
-    private final RedisETagManagerImpl<E> redisETagManagerImpl;
+    private final CacheManager<E> cacheManager;
+    private final ETagManager<E> eTagManager;
 
     public DynamoDBAggregates(Class<E> TYPE, DynamoDBRepository<E> db,
                               String HASH_IDENTIFIER, String IDENTIFIER,
-                              ClusterCacheManagerImpl<E> clusterCacheManagerImpl, RedisETagManagerImpl<E> redisETagManagerImpl) {
+                              CacheManager<E> cacheManager, ETagManager<E> eTagManager) {
         this.TYPE = TYPE;
         this.db = db;
         this.HASH_IDENTIFIER = HASH_IDENTIFIER;
         this.IDENTIFIER = IDENTIFIER;
-        this.clusterCacheManagerImpl = clusterCacheManagerImpl;
-        this.redisETagManagerImpl = redisETagManagerImpl;
+        this.cacheManager = cacheManager;
+        this.eTagManager = eTagManager;
     }
     
     public void aggregation(JsonObject identifiers, QueryPack<E> queryPack, String[] projections,
@@ -211,7 +211,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                 newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
         final List<GroupingConfiguration> groupingParam = queryPack.getAggregateFunction().getGroupBy();
 
-        clusterCacheManagerImpl.getAggCache(cacheKey, cacheRes -> {
+        cacheManager.checkAggregationCache(cacheKey, cacheRes -> {
             if (cacheRes.failed()) {
                 final Handler<AsyncResult<List<E>>> res = allResult -> {
                     if (allResult.failed()) {
@@ -327,7 +327,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                 newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
         final List<GroupingConfiguration> groupingParam = queryPack.getAggregateFunction().getGroupBy();
 
-        clusterCacheManagerImpl.getAggCache(cacheKey, cacheRes -> {
+        cacheManager.checkAggregationCache(cacheKey, cacheRes -> {
             if (cacheRes.failed()) {
                 final Handler<AsyncResult<List<E>>> res = allResult -> {
                     if (allResult.failed()) {
@@ -439,7 +439,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                 newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
         final List<GroupingConfiguration> groupingParam = queryPack.getAggregateFunction().getGroupBy();
 
-        clusterCacheManagerImpl.getAggCache(cacheKey, cacheRes -> {
+        cacheManager.checkAggregationCache(cacheKey, cacheRes -> {
             if (cacheRes.failed()) {
                 final Handler<AsyncResult<List<E>>> res = allResult -> {
                     if (allResult.failed()) {
@@ -515,7 +515,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         String cacheKey = queryPack.getBaseEtagKey() +
                 newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
 
-        clusterCacheManagerImpl.getAggCache(cacheKey, cacheRes -> {
+        cacheManager.checkAggregationCache(cacheKey, cacheRes -> {
             if (cacheRes.failed()) {
                 final AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
 
@@ -840,18 +840,22 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
 
         String newEtag = ModelUtils.returnNewEtag(content.hashCode());
 
-        clusterCacheManagerImpl.replaceAggCache(content, () -> cacheKey, cacheRes -> {
+        cacheManager.replaceAggregationCache(content, () -> cacheKey, cacheRes -> {
             if (cacheRes.failed()) {
                 logger.error("Cache failed on agg!");
             }
 
-            redisETagManagerImpl.replaceAggEtag(etagItemListHashKey, etagKey, newEtag, etagRes -> {
-                if (etagRes.failed()) {
-                    resultHandler.handle(Future.failedFuture(etagRes.cause()));
-                } else {
-                    resultHandler.handle(Future.succeededFuture(content));
-                }
-            });
+            if (eTagManager != null) {
+                eTagManager.replaceAggregationEtag(etagItemListHashKey, etagKey, newEtag, etagRes -> {
+                    if (etagRes.failed()) {
+                        resultHandler.handle(Future.failedFuture(etagRes.cause()));
+                    } else {
+                        resultHandler.handle(Future.succeededFuture(content));
+                    }
+                });
+            } else {
+                resultHandler.handle(Future.succeededFuture(content));
+            }
         });
     }
 }

@@ -44,7 +44,7 @@ import java.util.Queue;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class QueryPack<E extends ETagable & Model> {
+public class QueryPack<E extends Model> {
     private String query;
     private String baseEtagKey;
     private String route;

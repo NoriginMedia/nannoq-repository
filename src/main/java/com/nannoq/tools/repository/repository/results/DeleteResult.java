@@ -34,7 +34,7 @@ import com.nannoq.tools.repository.models.Model;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class DeleteResult<K extends ETagable & Model> {
+public class DeleteResult<K extends Model> {
     private final K item;
     private long preOperationProcessingTime;
     private long operationProcessingTime;

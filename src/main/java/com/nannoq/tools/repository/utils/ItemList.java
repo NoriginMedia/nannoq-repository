@@ -26,7 +26,6 @@
 package com.nannoq.tools.repository.utils;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.models.ModelUtils;
 import io.vertx.core.json.JsonArray;
@@ -42,7 +41,7 @@ import java.util.List;
  * @version 17.11.2017
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class ItemList<E extends ETagable & Model> {
+public class ItemList<E extends Model> {
     private String etag;
     private String pageToken;
     private int count;

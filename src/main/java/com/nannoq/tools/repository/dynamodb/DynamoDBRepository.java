@@ -40,10 +40,12 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
+import com.nannoq.tools.repository.repository.Repository;
+import com.nannoq.tools.repository.repository.cache.CacheManager;
 import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
+import com.nannoq.tools.repository.repository.etag.ETagManager;
 import com.nannoq.tools.repository.repository.etag.RedisETagManagerImpl;
 import com.nannoq.tools.repository.repository.redis.RedisUtils;
-import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
 import com.nannoq.tools.repository.services.internal.InternalRepositoryService;
@@ -57,6 +59,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.annotation.Nullable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
@@ -85,6 +88,9 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     public static final String PAGINATION_INDEX = "PAGINATION_INDEX";
 
     protected Vertx vertx;
+    private boolean isCached = false;
+    private boolean isEtagEnabled = false;
+
     private final Class<E> TYPE;
     private String HASH_IDENTIFIER;
     private String IDENTIFIER;
@@ -93,7 +99,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private boolean hasRangeKey;
     private static AmazonDynamoDBAsyncClient DYNAMO_DB_CLIENT;
     protected static DynamoDBMapper DYNAMO_DB_MAPPER;
-    private final RedisClient REDIS_CLIENT;
+    private RedisClient REDIS_CLIENT;
     private static String S3BucketName;
 
     private static final Object SYNC_MAPPER_OBJECT = new Object();
@@ -106,18 +112,45 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private final DynamoDBUpdater<E> updater;
     private final DynamoDBDeleter<E> deleter;
 
-    protected final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
-    protected final RedisETagManagerImpl<E> redisETagManagerImpl;
+    protected CacheManager<E> cacheManager;
+    protected ETagManager<E> etagManager;
 
     private Map<String, Field> fieldMap = new ConcurrentHashMap<>();
     private Map<String, Type> typeMap = new ConcurrentHashMap<>();
 
     public DynamoDBRepository(Class<E> type, JsonObject appConfig) {
-        this(null, type, appConfig);
+        this(null, type, appConfig, null, null);
     }
 
-    @SuppressWarnings("unchecked")
+    public DynamoDBRepository(Class<E> type, JsonObject appConfig, @Nullable CacheManager<E> cacheManager) {
+        this(null, type, appConfig, cacheManager, null);
+    }
+
+    public DynamoDBRepository(Class<E> type, JsonObject appConfig, @Nullable ETagManager<E> eTagManager) {
+        this(null, type, appConfig, null, eTagManager);
+    }
+
+    public DynamoDBRepository(Class<E> type, JsonObject appConfig,
+                              @Nullable CacheManager<E> cacheManager, @Nullable ETagManager<E> eTagManager) {
+        this(null, type, appConfig, cacheManager, eTagManager);
+    }
+
     public DynamoDBRepository(Vertx vertx, Class<E> type, JsonObject appConfig) {
+        this(vertx, type, appConfig, null, null);
+    }
+
+    public DynamoDBRepository(Vertx vertx, Class<E> type, JsonObject appConfig,
+                              @Nullable CacheManager<E> cacheManager) {
+        this(vertx, type, appConfig, cacheManager, null);
+    }
+
+    public DynamoDBRepository(Vertx vertx, Class<E> type, JsonObject appConfig,
+                              @Nullable ETagManager<E> eTagManager) {
+        this(vertx, type, appConfig, null, eTagManager);
+    }
+    @SuppressWarnings("unchecked")
+    public DynamoDBRepository(Vertx vertx, Class<E> type, JsonObject appConfig,
+                              @Nullable CacheManager<E> cacheManager, @Nullable ETagManager<E> eTagManager) {
         this.TYPE = type;
         this.vertx = vertx;
 
@@ -141,28 +174,48 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                 .anyMatch(a -> a instanceof DynamoDBDocument)) {
             COLLECTION = tableName.orElseGet(() ->
                     type.getSimpleName().substring(0, 1).toLowerCase() + type.getSimpleName().substring(1) + "s");
-            this.REDIS_CLIENT = RedisUtils.getRedisClient(getVertx(), appConfig);
+
+            if (appConfig.getString("redis_host") != null) {
+                this.REDIS_CLIENT = RedisUtils.getRedisClient(getVertx(), appConfig);
+            }
         } else {
             logger.error("Models must include the DynamoDBTable annotation, with the tablename!");
 
             throw new IllegalArgumentException("Models must include the DynamoDBTable annotation, with the tablename");
         }
 
-        this.redisETagManagerImpl = new RedisETagManagerImpl<>(type, vertx, COLLECTION, this);
-        this.clusterCacheManagerImpl = new ClusterCacheManagerImpl<>(type, vertx, redisETagManagerImpl);
+        if (eTagManager != null) {
+            this.etagManager = eTagManager;
+            isEtagEnabled = true;
+        } else {
+            if (appConfig.getString("redis_host") != null) {
+                this.etagManager = new RedisETagManagerImpl<>(type, getRedisClient());
+                isEtagEnabled = true;
+            } else {
+                logger.warn("No Redis Configuration present, no etag management is initialized!");
+            }
+        }
+
+        if (cacheManager != null) {
+            this.cacheManager = cacheManager;
+            isCached = true;
+        } else {
+            this.cacheManager = new ClusterCacheManagerImpl<>(type, vertx);
+            isCached = true;
+        }
 
         setHashAndRange(type);
         Map<String, JsonObject> GSI_KEY_MAP = setGsiKeys(type);
-        clusterCacheManagerImpl.createCaches();
+        this.cacheManager.initializeCache(res -> isCached = res.succeeded());
 
         this.parameters = new DynamoDBParameters<>(TYPE, this, HASH_IDENTIFIER, IDENTIFIER, PAGINATION_IDENTIFIER);
-        this.aggregates = new DynamoDBAggregates<>(TYPE, this, HASH_IDENTIFIER, IDENTIFIER, clusterCacheManagerImpl, redisETagManagerImpl);
+        this.aggregates = new DynamoDBAggregates<>(TYPE, this, HASH_IDENTIFIER, IDENTIFIER, this.cacheManager, etagManager);
 
-        this.creator = new DynamoDBCreator<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, clusterCacheManagerImpl);
+        this.creator = new DynamoDBCreator<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, this.cacheManager, etagManager);
         this.reader = new DynamoDBReader<>(TYPE, vertx, this, COLLECTION, HASH_IDENTIFIER, IDENTIFIER,
-                PAGINATION_IDENTIFIER, GSI_KEY_MAP, parameters, clusterCacheManagerImpl);
+                PAGINATION_IDENTIFIER, GSI_KEY_MAP, parameters, this.cacheManager, this.etagManager);
         this.updater = new DynamoDBUpdater<>(this);
-        this.deleter = new DynamoDBDeleter<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, clusterCacheManagerImpl);
+        this.deleter = new DynamoDBDeleter<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, this.cacheManager, etagManager);
     }
 
     private Vertx getVertx() {
@@ -923,16 +976,6 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     @Override
     public void doDelete(List<JsonObject> identifiers, Handler<AsyncResult<List<E>>> asyncResultHandler) {
         deleter.doDelete(identifiers, asyncResultHandler);
-    }
-
-    @Override
-    public String buildCollectionEtagKey() {
-        return redisETagManagerImpl.buildCollectionEtagKey();
-    }
-
-    @Override
-    public void getEtags(Handler<AsyncResult<List<String>>> resultHandler) {
-        redisETagManagerImpl.getEtags(resultHandler);
     }
 
     @Override

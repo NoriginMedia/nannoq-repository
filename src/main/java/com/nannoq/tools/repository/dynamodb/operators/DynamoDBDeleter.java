@@ -38,13 +38,14 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
+import com.nannoq.tools.repository.repository.cache.CacheManager;
+import com.nannoq.tools.repository.repository.etag.ETagManager;
 import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
+import io.vertx.serviceproxy.ServiceException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import io.vertx.serviceproxy.ServiceException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,7 +66,8 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
     private final Class<E> TYPE;
     private final Vertx vertx;
     private final DynamoDBRepository<E> db;
-    private final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
+    private final CacheManager<E> cacheManager;
+    private final ETagManager<E> eTagManager;
 
     private final String HASH_IDENTIFIER;
     private final String IDENTIFIER;
@@ -74,14 +76,16 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
 
     public DynamoDBDeleter(Class<E> type, Vertx vertx, DynamoDBRepository<E> db,
                            String HASH_IDENTIFIER, String IDENTIFIER,
-                           ClusterCacheManagerImpl<E> clusterCacheManagerImpl) {
+                           CacheManager<E> cacheManager,
+                           ETagManager<E> eTagManager) {
         TYPE = type;
         this.vertx = vertx;
         this.db = db;
-        this.clusterCacheManagerImpl = clusterCacheManagerImpl;
+        this.cacheManager = cacheManager;
         this.DYNAMO_DB_MAPPER = db.getDynamoDbMapper();
         this.HASH_IDENTIFIER = HASH_IDENTIFIER;
         this.IDENTIFIER = IDENTIFIER;
+        this.eTagManager = eTagManager;
     }
 
     @SuppressWarnings({"unchecked", "ThrowableResultOfMethodCallIgnored"})
@@ -99,11 +103,17 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
                 if (logger.isDebugEnabled()) { logger.debug("To Delete: " + Json.encodePrettily(items)); }
 
                 List<Future> deleteFutures = new ArrayList<>();
+                List<Future> etagFutures = new ArrayList<>();
 
                 items.forEach(record -> {
                     Future<E> deleteFuture = Future.future();
+                    Future<Boolean> deleteEtagsFuture = Future.future();
 
                     try {
+                        if (eTagManager != null) {
+                            eTagManager.removeProjectionsEtags(items.get(0).getHash(), deleteEtagsFuture.completer());
+                        }
+
                         this.optimisticLockingDelete(record, null, deleteFuture);
                     } catch (Exception e) {
                         logger.error(e);
@@ -112,6 +122,7 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
                     }
 
                     deleteFutures.add(deleteFuture);
+                    etagFutures.add(deleteEtagsFuture);
                 });
 
                 CompositeFuture.all(deleteFutures).setHandler(res -> {
@@ -123,13 +134,31 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
                             if (purgeRes.failed()) {
                                 future.fail(purgeRes.cause());
                             } else {
-                                future.complete(deleteFutures.stream()
-                                        .map(finalFuture -> (E) finalFuture.result())
-                                        .collect(toList()));
+                                if (eTagManager != null) {
+                                    Future<Boolean> removeETags = Future.future();
+
+                                    eTagManager.destroyEtags(items.get(0).getHash(), removeETags.completer());
+
+                                    etagFutures.add(removeETags);
+
+                                    CompositeFuture.all(etagFutures).setHandler(etagRes -> {
+                                        if (etagRes.failed()) {
+                                            future.fail(purgeRes.cause());
+                                        } else {
+                                            future.complete(deleteFutures.stream()
+                                                    .map(finalFuture -> (E) finalFuture.result())
+                                                    .collect(toList()));
+                                        }
+                                    });
+                                } else {
+                                    future.complete(deleteFutures.stream()
+                                            .map(finalFuture -> (E) finalFuture.result())
+                                            .collect(toList()));
+                                }
                             }
                         });
 
-                        clusterCacheManagerImpl.purgeCache(purgeFuture, items, e -> {
+                        cacheManager.purgeCache(purgeFuture, items, e -> {
                             String hash = e.getHash();
                             String range = e.getRange();
 

@@ -79,9 +79,9 @@ public class DynamoDBRepositoryTestIT {
     private static final Logger logger = LoggerFactory.getLogger(DynamoDBRepositoryTestIT.class.getSimpleName());
 
     private final JsonObject config = new JsonObject()
-            .put("dynamo_endpoint", System.getProperty("dynamo.endpoint"))
             .put("redis_host", System.getProperty("redis.endpoint"))
             .put("redis_port", Integer.parseInt(System.getProperty("redis.port")))
+            .put("dynamo_endpoint", System.getProperty("dynamo.endpoint"))
             .put("dynamo_db_iam_id", "someTestId")
             .put("dynamo_db_iam_key", "someTestKey")
             .put("content_bucket", "someName");
@@ -694,25 +694,6 @@ public class DynamoDBRepositoryTestIT {
     }
 
     @Test
-    public void buildCollectionEtagKey() {
-        assertEquals("data_api_testModels_s_etag", repo.buildCollectionEtagKey());
-    }
-
-    @Test
-    public void getEtags(TestContext testContext) {
-        Async async = testContext.async();
-
-        repo.getEtags(etags -> {
-            if (etags.failed()) {
-                testContext.fail(etags.cause());
-                async.complete();
-            } else {
-                async.complete();
-            }
-        });
-    }
-
-    @Test
     public void remoteCreate(TestContext testContext) {
         Async async = testContext.async();
 
@@ -803,8 +784,11 @@ public class DynamoDBRepositoryTestIT {
     public void getRedisClient(TestContext testContext) {
         Async async = testContext.async();
 
-        testContext.assertNotNull(repo.getRedisClient());
-
-        repo.getRedisClient().info(info -> async.complete());
+        if (config.getString("redis_host") != null) {
+            testContext.assertNotNull(repo.getRedisClient());
+            repo.getRedisClient().info(info -> async.complete());
+        } else {
+            testContext.assertNull(repo.getRedisClient());
+        }
     }
 }

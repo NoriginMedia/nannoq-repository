@@ -37,15 +37,16 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
+import com.nannoq.tools.repository.repository.cache.CacheManager;
+import com.nannoq.tools.repository.repository.etag.ETagManager;
 import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import io.vertx.redis.RedisClient;
 import io.vertx.serviceproxy.ServiceException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 import java.util.function.Function;
@@ -65,7 +66,8 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
     private final Vertx vertx;
     private final DynamoDBRepository<E> db;
 
-    private final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
+    private final CacheManager<E> cacheManager;
+    private final ETagManager<E> eTagManager;
 
     private final String HASH_IDENTIFIER;
     private final String IDENTIFIER;
@@ -78,15 +80,17 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
 
     public DynamoDBCreator(Class<E> type, Vertx vertx, DynamoDBRepository<E> db,
                            String HASH_IDENTIFIER, String IDENTIFIER,
-                           ClusterCacheManagerImpl<E> clusterCacheManagerImpl) {
+                           CacheManager<E> cacheManager,
+                           ETagManager<E> eTagManager) {
         TYPE = type;
         this.vertx = vertx;
         this.db = db;
-        this.clusterCacheManagerImpl = clusterCacheManagerImpl;
+        this.cacheManager = cacheManager;
         this.DYNAMO_DB_MAPPER = db.getDynamoDbMapper();
         this.REDIS_CLIENT = db.getRedisClient();
         this.HASH_IDENTIFIER = HASH_IDENTIFIER;
         this.IDENTIFIER = IDENTIFIER;
+        this.eTagManager = eTagManager;
         cacheIdSupplier = e -> {
             String hash = e.getHash();
             String range = e.getRange();
@@ -107,7 +111,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
             try {
                 List<Future> writeFutures = new ArrayList<>();
 
-                writeMap.forEach((record, updateLogic) -> {
+                writeMap.forEach((E record, Function<E, E> updateLogic) -> {
                     Future<E> writeFuture = Future.future();
 
                     if (!create && updateLogic != null) {
@@ -125,25 +129,20 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                     } else {
                         if (logger.isDebugEnabled()) { logger.debug("Running remoteCreate..."); }
 
-                        db.setSingleRecordEtag(record.generateAndSetEtag(new HashMap<>()), tagResult ->
-                                RedisUtils.performJedisWithRetry(REDIS_CLIENT, tagResult.result()));
+                        if (eTagManager != null) {
+                            eTagManager.setSingleRecordEtag(record.generateAndSetEtag(new HashMap<>()), tagResult ->
+                                    RedisUtils.performJedisWithRetry(REDIS_CLIENT, tagResult.result()));
+                        }
 
                         try {
                             E finalRecord = db.setCreatedAt(db.setUpdatedAt(record));
+                            final List<E> es = Collections.singletonList(finalRecord);
 
                             DYNAMO_DB_MAPPER.save(finalRecord, buildExistingExpression(finalRecord, false));
                             Future<Boolean> purgeFuture = Future.future();
-                            purgeFuture.setHandler(purgeRes -> {
-                                if (purgeRes.failed()) {
-                                    writeFuture.fail(purgeRes.cause());
-                                } else {
-                                    writeFuture.complete(finalRecord);
-                                }
-                            });
+                            destroyEtagsAfterCachePurge(writeFuture, finalRecord, purgeFuture, record.getHash());
 
-                            clusterCacheManagerImpl.replaceCache(purgeFuture, Collections.singletonList(finalRecord),
-                                    shortCacheIdSupplier,
-                                    cacheIdSupplier);
+                            cacheManager.replaceCache(purgeFuture, es, shortCacheIdSupplier, cacheIdSupplier);
                         } catch (Exception e) {
                             writeFuture.fail(e);
                         }
@@ -203,44 +202,37 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                 newerVersion = updateLogic.apply(newerVersion);
                 newerVersion = db.setUpdatedAt(newerVersion);
 
-                db.setSingleRecordEtag(newerVersion.generateAndSetEtag(new HashMap<>()),
-                        tagResult -> RedisUtils.performJedisWithRetry(
-                                REDIS_CLIENT, tagResult.result()));
+                if (eTagManager != null) {
+                    eTagManager.setSingleRecordEtag(newerVersion.generateAndSetEtag(new HashMap<>()),
+                            tagResult -> RedisUtils.performJedisWithRetry(
+                                    REDIS_CLIENT, tagResult.result()));
+                }
 
                 if (logger.isDebugEnabled()) { logger.debug("Performing " + counter + " remoteUpdate!"); }
                 DYNAMO_DB_MAPPER.save(newerVersion, buildExistingExpression(newerVersion, true));
                 Future<Boolean> purgeFuture = Future.future();
-                purgeFuture.setHandler(purgeRes -> {
-                    if (purgeRes.failed()) {
-                        writeFuture.fail(purgeRes.cause());
-                    } else {
-                        writeFuture.complete(record);
-                    }
-                });
+                destroyEtagsAfterCachePurge(writeFuture, record, purgeFuture, record.getHash());
 
-                clusterCacheManagerImpl.replaceCache(purgeFuture, Collections.singletonList(newerVersion),
+                cacheManager.replaceCache(purgeFuture, Collections.singletonList(newerVersion),
                         shortCacheIdSupplier, cacheIdSupplier);
                 if (logger.isDebugEnabled()) { logger.debug("Update " + counter + " performed successfully!"); }
             } else {
                 E updatedRecord = updateLogic.apply(record);
                 newerVersion = db.setUpdatedAt(updatedRecord);
 
-                db.setSingleRecordEtag(updatedRecord.generateAndSetEtag(new HashMap<>()),
-                        tagResult -> RedisUtils.performJedisWithRetry(
-                                REDIS_CLIENT, tagResult.result()));
+                if (eTagManager != null) {
+                    eTagManager.setSingleRecordEtag(updatedRecord.generateAndSetEtag(new HashMap<>()),
+                            tagResult -> RedisUtils.performJedisWithRetry(
+                                    REDIS_CLIENT, tagResult.result()));
+                }
 
                 if (logger.isDebugEnabled()) { logger.debug("Performing immediate remoteUpdate!"); }
                 DYNAMO_DB_MAPPER.save(updatedRecord, buildExistingExpression(record, true));
                 Future<Boolean> purgeFuture = Future.future();
-                purgeFuture.setHandler(purgeRes -> {
-                    if (purgeRes.failed()) {
-                        writeFuture.fail(purgeRes.cause());
-                    } else {
-                        writeFuture.complete(record);
-                    }
-                });
+                purgeFuture.setHandler(purgeRes ->
+                        destroyEtagsAfterCachePurge(writeFuture, record, purgeFuture, record.getHash()));
 
-                clusterCacheManagerImpl.replaceCache(purgeFuture, Collections.singletonList(updatedRecord),
+                cacheManager.replaceCache(purgeFuture, Collections.singletonList(updatedRecord),
                         shortCacheIdSupplier, cacheIdSupplier);
                 if (logger.isDebugEnabled()) { logger.debug("Immediate remoteUpdate performed!"); }
             }
@@ -293,6 +285,37 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
 
             optimisticLockingSave(newestRecord, updateLogic, ++counter, writeFuture, record);
         }
+    }
+
+    private void destroyEtagsAfterCachePurge(Future<E> writeFuture, E record, Future<Boolean> purgeFuture, String hash) {
+        purgeFuture.setHandler(purgeRes -> {
+            if (purgeRes.failed()) {
+                if (eTagManager != null) {
+                    eTagManager.destroyEtags(record.getHash(), res ->
+                            writeFuture.complete(record));
+                } else {
+                    writeFuture.complete(record);
+                }
+            } else {
+                if (eTagManager != null) {
+                    Future<Boolean> removeProjections = Future.future();
+                    Future<Boolean> removeETags = Future.future();
+
+                    eTagManager.removeProjectionsEtags(hash, removeProjections.completer());
+                    eTagManager.destroyEtags(record.getHash(), removeETags.completer());
+
+                    CompositeFuture.all(removeProjections, removeETags).setHandler(res -> {
+                        if (res.failed()) {
+                            writeFuture.fail(res.cause());
+                        } else {
+                            writeFuture.complete(record);
+                        }
+                    });
+                } else {
+                    writeFuture.complete(record);
+                }
+            }
+        });
     }
 
     private DynamoDBSaveExpression buildExistingExpression(E element, boolean exists) {

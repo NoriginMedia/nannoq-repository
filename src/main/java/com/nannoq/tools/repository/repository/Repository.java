@@ -63,7 +63,7 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 @SuppressWarnings("unused")
-public interface Repository<E extends ETagable & Model> {
+public interface Repository<E extends Model> {
     Logger logger = LoggerFactory.getLogger(Repository.class.getSimpleName());
 
     String ORDER_BY_KEY = "orderBy";
@@ -560,33 +560,6 @@ public interface Repository<E extends ETagable & Model> {
 
     void doDelete(List<JsonObject> identifiers, Handler<AsyncResult<List<E>>> resultHandler);
 
-    String buildCollectionEtagKey();
-
-    default void setCollectionEtag(Handler<AsyncResult<Consumer<RedisClient>>> resultHandler) {
-        String collectionEtagKey = buildCollectionEtagKey();
-
-        getEtags(result -> {
-            if (result.failed()) {
-                logger.error("Could not build etags...");
-                logger.error(result.cause());
-            } else {
-                String collectionEtag = buildCollectionEtag(result.result());
-
-                Consumer<RedisClient> consumer = redisClient ->
-                        redisClient.set(collectionEtagKey, collectionEtag, redisResult -> {
-                            if (redisResult.failed()) {
-                                logger.error("Could not set " + collectionEtag +
-                                        " for " + collectionEtagKey + ",cause: " + result.cause());
-                            }
-                        });
-
-                resultHandler.handle(Future.succeededFuture(consumer));
-            }
-        });
-    }
-
-    void getEtags(Handler<AsyncResult<List<String>>> resultHandler);
-
     default String buildCollectionEtag(List<String> etags) {
         final long[] newEtag = new long[1];
 
@@ -599,18 +572,6 @@ public interface Repository<E extends ETagable & Model> {
 
             return "noTagForCollection";
         }
-    }
-
-    default void setSingleRecordEtag(Map<String, String> etagMap,
-                                     Handler<AsyncResult<Consumer<RedisClient>>> resultHandler) {
-        Consumer<RedisClient> consumer = redisClient -> etagMap.keySet()
-                .forEach(key -> redisClient.set(key, etagMap.get(key), result -> {
-                    if (result.failed()) {
-                        logger.error("Could not set " + etagMap.get(key) + " for " + key + ",cause: " + result.cause());
-                    }
-                }));
-
-        resultHandler.handle(Future.succeededFuture(consumer));
     }
 
     default Double extractValueAsDouble(Field field, E r) {
