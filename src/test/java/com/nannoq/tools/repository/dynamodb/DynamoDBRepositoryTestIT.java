@@ -31,9 +31,12 @@ import com.amazonaws.services.dynamodbv2.datamodeling.S3Link;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.hazelcast.config.Config;
 import com.nannoq.tools.repository.dynamodb.model.TestModel;
+import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.repository.results.CreateResult;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
+import com.nannoq.tools.repository.utils.AggregateFunction;
+import com.nannoq.tools.repository.utils.AggregateFunctions;
 import com.nannoq.tools.repository.utils.FilterParameter;
 import com.nannoq.tools.repository.utils.QueryPack;
 import io.vertx.core.*;
@@ -606,14 +609,50 @@ public class DynamoDBRepositoryTestIT {
     public void aggregation(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allRes -> {
+            final JsonObject idObject = new JsonObject()
+                    .put("hash", "testString");
+            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                    .withRoute("TestModelReadAll")
+                    .withQuery("NoToken")
+                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+                    .build();
+
+            repo.aggregation(idObject, queryPack, new String[]{}, res -> {
+                final Integer count = new JsonObject(res.result()).getInteger("count");
+
+                testContext.assertEquals(100, count, "Count is: " + count);
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void aggregationWithGSI(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allRes -> {
+            final JsonObject idObject = new JsonObject()
+                    .put("hash", "testStringThree");
+            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                    .withRoute("TestModelReadAllGSI")
+                    .withQuery("NoToken")
+                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringThree"))
+                    .build();
+
+            repo.aggregation(idObject, queryPack, new String[]{}, "TEST_GSI", res -> {
+                final JsonObject results = new JsonObject(res.result());
+
+                Repository.logger.info("Results is: " + results.encodePrettily());
+
+                final Integer count = results.getInteger("count");
+
+                testContext.assertEquals(100, count, "Count is: " + count);
+
+                async.complete();
+            });
+        });
     }
 
     @Test
@@ -627,70 +666,128 @@ public class DynamoDBRepositoryTestIT {
     public void readAllWithoutPagination(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allItemsRes -> {
+            repo.readAllWithoutPagination("testString", allItems -> {
+                testContext.assertTrue(allItems.succeeded());
+                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void readAllWithoutPaginationWithIdentifierAndQueryPack(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allItemsRes -> {
+            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                    .withRoute("TestModelReadAll")
+                    .withQuery("NoToken")
+                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+                    .build();
+
+            repo.readAllWithoutPagination("testString", queryPack, allItems -> {
+                testContext.assertTrue(allItems.succeeded());
+                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void readAllWithoutPaginationWithIdentifierAndQueryPackAndProjections(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allItemsRes -> {
+            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                    .withRoute("TestModelReadAll")
+                    .withQuery("NoToken")
+                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+                    .build();
+
+            repo.readAllWithoutPagination("testString", queryPack, new String[]{}, allItems -> {
+                testContext.assertTrue(allItems.succeeded());
+                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void readAllWithoutPaginationWithIdentifierAndQueryPackAndProjectionsAndGSI(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allItemsRes -> {
+            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                    .withRoute("TestModelReadAll")
+                    .withQuery("NoToken")
+                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+                    .build();
+
+            repo.readAllWithoutPagination("testStringThree", queryPack, new String[]{}, "TEST_GSI", allItems -> {
+                testContext.assertTrue(allItems.succeeded());
+                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void readAllWithoutPaginationWithQueryPackAndProjections(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allItemsRes -> {
+            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                    .withRoute("TestModelReadAll")
+                    .withQuery("NoToken")
+                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+                    .build();
+
+            repo.readAllWithoutPagination(queryPack, new String[]{}, allItems -> {
+                testContext.assertTrue(allItems.succeeded());
+                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void readAllWithoutPaginationWithQueryPackAndProjectionsAndGSI(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, allItemsRes -> {
+            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                    .withRoute("TestModelReadAll")
+                    .withQuery("NoToken")
+                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringThree"))
+                    .build();
+
+            repo.readAllWithoutPagination(queryPack, new String[]{}, "TEST_GSI", allItems -> {
+                testContext.assertTrue(allItems.succeeded());
+                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void readAllPaginated(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
-    }
+        createXItems(100, allItemsRes -> {
+            repo.readAllPaginated(allItems -> {
+                testContext.assertTrue(allItems.succeeded());
+                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
 
-    @Test
-    public void doWriteCreate(TestContext testContext) {
-        Async async = testContext.async();
-
-        async.complete();
-    }
-
-    @Test
-    public void doWriteUpdate(TestContext testContext) {
-        Async async = testContext.async();
-
-        async.complete();
-    }
-
-    @Test
-    public void doDelete(TestContext testContext) {
-        Async async = testContext.async();
-
-        async.complete();
+                async.complete();
+            });
+        });
     }
 
     @Test

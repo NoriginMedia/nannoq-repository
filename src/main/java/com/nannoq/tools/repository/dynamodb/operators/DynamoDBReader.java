@@ -1296,7 +1296,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 long timeBefore = System.currentTimeMillis();
 
                 if (GSI != null) {
-                    scanExpression.setIndexName(GSI_KEY_MAP.get(GSI).getString("hash"));
+                    scanExpression.setIndexName(GSI);
                     scanExpression.setConsistentRead(false);
                 }
 
@@ -1382,21 +1382,14 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
                     filterExpression.setConsistentRead(true);
                 } else {
+                    filterExpression.setIndexName(GSI);
+
                     if (filterExpression.getKeyConditionExpression() == null) {
                         setFilterExpressionKeyCondition(filterExpression, GSI, identifier);
                     }
                 }
 
-                if (projections != null) {
-                    filterExpression.withSelect("SPECIFIC_ATTRIBUTES");
-
-                    if (projections.length == 1) {
-                        filterExpression.withProjectionExpression(projections[0]);
-                    } else {
-                        filterExpression.withProjectionExpression(String.join(", ", projections));
-
-                    }
-                }
+                setProjectionsOnQueryExpression(filterExpression, projections);
 
                 long timeBefore = System.currentTimeMillis();
 

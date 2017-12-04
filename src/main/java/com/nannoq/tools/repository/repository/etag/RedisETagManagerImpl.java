@@ -144,4 +144,49 @@ public class RedisETagManagerImpl<E extends ETagable & Model> implements ETagMan
                     itemListEtagFuture.complete(Boolean.TRUE);
                 }));
     }
+
+    @Override
+    public void checkItemEtag(String etagKeyBase, String key, String etag,
+                              Handler<AsyncResult<Boolean>> resultHandler) {
+        RedisUtils.performJedisWithRetry(REDIS_CLIENT, innerRedis ->
+                innerRedis.hget(etagKeyBase, key, getResult -> {
+                    if (getResult.succeeded() && getResult.result() != null &&
+                            getResult.result().equals(etag)) {
+                        resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
+                    } else {
+                        resultHandler.handle(Future.succeededFuture(Boolean.FALSE));
+                    }
+                }));
+    }
+
+    @Override
+    public void checkItemListEtag(String etagItemListHashKey, String etagKey, String etag,
+                                  Handler<AsyncResult<Boolean>> resultHandler) {
+        RedisUtils.performJedisWithRetry(REDIS_CLIENT, innerRedis ->
+                innerRedis.hget(etagItemListHashKey, etagKey, getResult -> {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Stored etag: " + getResult.result() + ", request: " + etag);
+                    }
+
+                    if (getResult.succeeded() && getResult.result() != null &&
+                            getResult.result().equals(etag)) {
+                        resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
+                    } else {
+                        resultHandler.handle(Future.succeededFuture(Boolean.FALSE));
+                    }
+                }));
+    }
+
+    @Override
+    public void checkAggregationEtag(String etagItemListHashKey, String etagKey, String etag,
+                                     Handler<AsyncResult<Boolean>> resultHandler) {
+        RedisUtils.performJedisWithRetry(REDIS_CLIENT, ir -> ir.hget(etagItemListHashKey, etagKey, getRes -> {
+            if (getRes.succeeded() && getRes.result() != null && getRes.result().equals(etag)) {
+                resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
+            } else {
+                resultHandler.handle(Future.succeededFuture(Boolean.FALSE));
+            }
+        }));
+
+    }
 }

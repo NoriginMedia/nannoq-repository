@@ -24,4 +24,8 @@ public interface ETagManager<E extends Model & ETagable> {
     void setSingleRecordEtag(Map<String, String> etagMap, Handler<AsyncResult<Consumer<RedisClient>>> resultHandler);
     void setProjectionEtags(String[] projections, String hash, E item);
     void setItemListEtags(String hash, String etagKey, ItemList<E> itemList, Future<Boolean> itemListEtagFuture);
+
+    void checkItemEtag(String etagKeyBase, String key, String requestEtag, Handler<AsyncResult<Boolean>> resultHandler);
+    void checkItemListEtag(String etagItemListHashKey, String etagKey, String etag, Handler<AsyncResult<Boolean>> resultHandler);
+    void checkAggregationEtag(String etagItemListHashKey, String etagKey, String etag, Handler<AsyncResult<Boolean>> resultHandler);
 }
