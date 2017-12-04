@@ -38,12 +38,12 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.CacheManager;
+import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
 import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import io.vertx.serviceproxy.ServiceException;
 
 import java.util.ArrayList;
@@ -60,12 +60,12 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LoggerFactory.getLogger(DynamoDBDeleter.class.getSimpleName());
+    private static final Logger logger = LogManager.getLogger(DynamoDBDeleter.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final Vertx vertx;
     private final DynamoDBRepository<E> db;
-    private final CacheManager<E> cacheManager;
+    private final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
 
     private final String HASH_IDENTIFIER;
     private final String IDENTIFIER;
@@ -74,11 +74,11 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
 
     public DynamoDBDeleter(Class<E> type, Vertx vertx, DynamoDBRepository<E> db,
                            String HASH_IDENTIFIER, String IDENTIFIER,
-                           CacheManager<E> cacheManager) {
+                           ClusterCacheManagerImpl<E> clusterCacheManagerImpl) {
         TYPE = type;
         this.vertx = vertx;
         this.db = db;
-        this.cacheManager = cacheManager;
+        this.clusterCacheManagerImpl = clusterCacheManagerImpl;
         this.DYNAMO_DB_MAPPER = db.getDynamoDbMapper();
         this.HASH_IDENTIFIER = HASH_IDENTIFIER;
         this.IDENTIFIER = IDENTIFIER;
@@ -129,7 +129,7 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
                             }
                         });
 
-                        cacheManager.purgeCache(purgeFuture, items, e -> {
+                        clusterCacheManagerImpl.purgeCache(purgeFuture, items, e -> {
                             String hash = e.getHash();
                             String range = e.getRange();
 

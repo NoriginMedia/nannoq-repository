@@ -40,9 +40,9 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.CacheManager;
-import com.nannoq.tools.repository.repository.ETagManager;
-import com.nannoq.tools.repository.repository.RedisUtils;
+import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
+import com.nannoq.tools.repository.repository.etag.RedisETagManagerImpl;
+import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
@@ -52,10 +52,10 @@ import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -69,7 +69,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
-import static java.util.stream.Collectors.reducing;
 import static java.util.stream.Collectors.toList;
 
 /**
@@ -81,7 +80,7 @@ import static java.util.stream.Collectors.toList;
 @SuppressWarnings({"Convert2MethodRef", "Duplicates"})
 public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cacheable>
         implements Repository<E>, InternalRepositoryService<E> {
-    private static final Logger logger = LoggerFactory.getLogger(DynamoDBRepository.class.getSimpleName());
+    private static final Logger logger = LogManager.getLogger(DynamoDBRepository.class.getSimpleName());
 
     public static final String PAGINATION_INDEX = "PAGINATION_INDEX";
 
@@ -107,8 +106,8 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private final DynamoDBUpdater<E> updater;
     private final DynamoDBDeleter<E> deleter;
 
-    protected final CacheManager<E> cacheManager;
-    protected final ETagManager<E> eTagManager;
+    protected final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
+    protected final RedisETagManagerImpl<E> redisETagManagerImpl;
 
     private Map<String, Field> fieldMap = new ConcurrentHashMap<>();
     private Map<String, Type> typeMap = new ConcurrentHashMap<>();
@@ -149,21 +148,21 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
             throw new IllegalArgumentException("Models must include the DynamoDBTable annotation, with the tablename");
         }
 
-        this.eTagManager = new ETagManager<>(type, vertx, COLLECTION, this);
-        this.cacheManager = new CacheManager<>(type, vertx, eTagManager);
+        this.redisETagManagerImpl = new RedisETagManagerImpl<>(type, vertx, COLLECTION, this);
+        this.clusterCacheManagerImpl = new ClusterCacheManagerImpl<>(type, vertx, redisETagManagerImpl);
 
         setHashAndRange(type);
         Map<String, JsonObject> GSI_KEY_MAP = setGsiKeys(type);
-        cacheManager.createCaches();
+        clusterCacheManagerImpl.createCaches();
 
         this.parameters = new DynamoDBParameters<>(TYPE, this, HASH_IDENTIFIER, IDENTIFIER, PAGINATION_IDENTIFIER);
-        this.aggregates = new DynamoDBAggregates<>(TYPE, this, HASH_IDENTIFIER, IDENTIFIER, cacheManager, eTagManager);
+        this.aggregates = new DynamoDBAggregates<>(TYPE, this, HASH_IDENTIFIER, IDENTIFIER, clusterCacheManagerImpl, redisETagManagerImpl);
 
-        this.creator = new DynamoDBCreator<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, cacheManager);
+        this.creator = new DynamoDBCreator<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, clusterCacheManagerImpl);
         this.reader = new DynamoDBReader<>(TYPE, vertx, this, COLLECTION, HASH_IDENTIFIER, IDENTIFIER,
-                PAGINATION_IDENTIFIER, GSI_KEY_MAP, parameters, cacheManager);
+                PAGINATION_IDENTIFIER, GSI_KEY_MAP, parameters, clusterCacheManagerImpl);
         this.updater = new DynamoDBUpdater<>(this);
-        this.deleter = new DynamoDBDeleter<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, cacheManager);
+        this.deleter = new DynamoDBDeleter<>(TYPE, vertx, this, HASH_IDENTIFIER, IDENTIFIER, clusterCacheManagerImpl);
     }
 
     private Vertx getVertx() {
@@ -928,12 +927,12 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     @Override
     public String buildCollectionEtagKey() {
-        return eTagManager.buildCollectionEtagKey();
+        return redisETagManagerImpl.buildCollectionEtagKey();
     }
 
     @Override
     public void getEtags(Handler<AsyncResult<List<String>>> resultHandler) {
-        eTagManager.getEtags(resultHandler);
+        redisETagManagerImpl.getEtags(resultHandler);
     }
 
     @Override
@@ -1060,6 +1059,11 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                                    String COLLECTION, Class TYPE,
                                    Handler<AsyncResult<Void>> resultHandler) {
         client.listTablesAsync(new AsyncHandler<ListTablesRequest, ListTablesResult>() {
+            private final Long DEFAULT_WRITE_TABLE = 100L;
+            private final Long DEFAULT_READ_TABLE = 100L;
+            private final Long DEFAULT_WRITE_GSI = 100L;
+            private final Long DEFAULT_READ_GSI = 100L;
+
             @Override
             public void onError(Exception e) {
                 logger.error("Cannot use this repository for creation, no connection: " + e);
@@ -1080,10 +1084,10 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                 } else {
                     CreateTableRequest req = mapper.generateCreateTableRequest(TYPE)
                             .withProvisionedThroughput(new ProvisionedThroughput()
-                                    .withWriteCapacityUnits(5L)
-                                    .withReadCapacityUnits(5L));
+                                    .withWriteCapacityUnits(DEFAULT_WRITE_TABLE)
+                                    .withReadCapacityUnits(DEFAULT_READ_TABLE));
 
-                    setAnyGlobalSecondaryIndexes(req, 10L, 10L);
+                    setAnyGlobalSecondaryIndexes(req, DEFAULT_READ_GSI, DEFAULT_WRITE_GSI);
 
                     client.createTableAsync(req, new AsyncHandler<CreateTableRequest, CreateTableResult>() {
                         @Override

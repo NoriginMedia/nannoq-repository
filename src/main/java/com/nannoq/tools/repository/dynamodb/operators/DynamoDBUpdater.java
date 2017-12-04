@@ -31,8 +31,8 @@ import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.repository.Repository;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -47,7 +47,7 @@ import static com.nannoq.tools.repository.repository.Repository.INCREMENTATION.S
  * @version 17.11.2017
  */
 public class DynamoDBUpdater<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LoggerFactory.getLogger(DynamoDBUpdater.class.getSimpleName());
+    private static final Logger logger = LogManager.getLogger(DynamoDBUpdater.class.getSimpleName());
 
     private final DynamoDBRepository<E> db;
 

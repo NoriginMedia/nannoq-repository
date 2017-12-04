@@ -32,7 +32,10 @@ import com.amazonaws.services.dynamodbv2.model.*;
 import com.hazelcast.config.Config;
 import com.nannoq.tools.repository.dynamodb.model.TestModel;
 import com.nannoq.tools.repository.repository.results.CreateResult;
+import com.nannoq.tools.repository.repository.results.ItemListResult;
+import com.nannoq.tools.repository.repository.results.ItemResult;
 import com.nannoq.tools.repository.utils.FilterParameter;
+import com.nannoq.tools.repository.utils.QueryPack;
 import io.vertx.core.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -87,6 +90,7 @@ public class DynamoDBRepositoryTestIT {
     private final Supplier<TestModel> nonNullTestModel = () -> new TestModel()
             .setSomeStringOne("testString")
             .setSomeStringTwo("testStringRange")
+            .setSomeStringThree("testStringThree")
             .setSomeLong(1L)
             .setSomeDate(testDate);
 
@@ -381,7 +385,7 @@ public class DynamoDBRepositoryTestIT {
         Async async = testContext.async();
         final List<Future> futureList = new CopyOnWriteArrayList<>();
 
-        createXItems(100, res -> {
+        createXItems(20, res -> {
             testContext.assertTrue(res.succeeded());
 
             res.result().stream().parallel().forEach(cr -> {
@@ -414,11 +418,41 @@ public class DynamoDBRepositoryTestIT {
     }
 
     @Test
+    public void batchRead(TestContext testContext) {
+        Async async = testContext.async();
+
+        createXItems(20, res -> {
+            testContext.assertTrue(res.succeeded());
+
+            final List<TestModel> items = res.result().stream()
+                    .map(CreateResult::getItem)
+                    .collect(toList());
+
+            final List<JsonObject> id = items.stream()
+                    .map(testModel -> new JsonObject()
+                            .put("hash", testModel.getHash())
+                            .put("range", testModel.getRange()))
+                    .collect(toList());
+
+            repo.batchRead(id, batchRead -> {
+                testContext.assertTrue(batchRead.succeeded());
+                testContext.assertTrue(batchRead.result().size() == res.result().size());
+
+                batchRead.result().stream()
+                        .map(ItemResult::getItem)
+                        .forEach(item -> testContext.assertTrue(items.contains(item)));
+
+                async.complete();
+            });
+        });
+    }
+
+    @Test
     public void readWithConsistencyAndProjections(TestContext testContext) {
         Async async = testContext.async();
         final List<Future> futureList = new CopyOnWriteArrayList<>();
 
-        createXItems(100, res -> {
+        createXItems(20, res -> {
             testContext.assertTrue(res.succeeded());
 
             res.result().stream().parallel().forEach(cr -> {
@@ -496,21 +530,76 @@ public class DynamoDBRepositoryTestIT {
     public void readAllWithIdentifiersAndPageTokenAndQueryPackAndProjections(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+            final JsonObject idObject = new JsonObject()
+                    .put("hash", "testString");
+
+            pageAllResults(idObject, null, null, testContext, async);
+        });
     }
 
     @Test
     public void readAllWithPageTokenAndQueryPackAndProjections(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+            pageAllResults(null, null, null, testContext, async);
+        });
     }
 
     @Test
     public void readAllWithIdentifiersAndPageTokenAndQueryPackAndProjectionsAndGSI(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+            final JsonObject idObject = new JsonObject()
+                    .put("hash", "testStringThree");
+
+            pageAllResults(idObject, null, "TEST_GSI", testContext, async);
+        });
+    }
+
+    private void pageAllResults(JsonObject idObject, String pageToken, String GSI,
+                                TestContext testContext, Async async) {
+        @SuppressWarnings("ConstantConditions")
+        final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
+                .withRoute("TestModelReadAll")
+                .withQuery(pageToken == null ? "NoToken" : pageToken)
+                .build();
+        final Handler<AsyncResult<ItemListResult<TestModel>>> handler = allItemsRes -> {
+            if (allItemsRes.succeeded()) {
+                final String finalPageToken = allItemsRes.result().getItemList().getPageToken();
+
+                if (finalPageToken.equalsIgnoreCase("END_OF_LIST")) {
+                    async.complete();
+                } else {
+                    pageAllResults(idObject, finalPageToken, GSI, testContext, async);
+                }
+            } else {
+                testContext.fail("All Items Result is false!");
+
+                async.complete();
+            }
+        };
+
+        if (idObject == null) {
+            if (GSI == null) {
+                repo.readAll(pageToken, queryPack, new String[]{}, handler);
+            } else {
+                testContext.fail("Must use an idobject with GSI");
+
+                async.complete();
+            }
+        } else {
+            if (GSI != null) {
+                repo.readAll(idObject, pageToken, queryPack, new String[]{}, GSI, handler);
+            } else {
+                repo.readAll(idObject, pageToken, queryPack, new String[]{}, handler);
+            }
+        }
     }
 
     @Test

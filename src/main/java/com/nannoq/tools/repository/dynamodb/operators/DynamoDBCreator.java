@@ -37,13 +37,13 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.CacheManager;
-import com.nannoq.tools.repository.repository.RedisUtils;
+import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
+import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import io.vertx.redis.RedisClient;
 import io.vertx.serviceproxy.ServiceException;
 
@@ -59,13 +59,13 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LoggerFactory.getLogger(DynamoDBCreator.class.getSimpleName());
+    private static final Logger logger = LogManager.getLogger(DynamoDBCreator.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final Vertx vertx;
     private final DynamoDBRepository<E> db;
 
-    private final CacheManager<E> cacheManager;
+    private final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
 
     private final String HASH_IDENTIFIER;
     private final String IDENTIFIER;
@@ -78,11 +78,11 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
 
     public DynamoDBCreator(Class<E> type, Vertx vertx, DynamoDBRepository<E> db,
                            String HASH_IDENTIFIER, String IDENTIFIER,
-                           CacheManager<E> cacheManager) {
+                           ClusterCacheManagerImpl<E> clusterCacheManagerImpl) {
         TYPE = type;
         this.vertx = vertx;
         this.db = db;
-        this.cacheManager = cacheManager;
+        this.clusterCacheManagerImpl = clusterCacheManagerImpl;
         this.DYNAMO_DB_MAPPER = db.getDynamoDbMapper();
         this.REDIS_CLIENT = db.getRedisClient();
         this.HASH_IDENTIFIER = HASH_IDENTIFIER;
@@ -141,7 +141,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                                 }
                             });
 
-                            cacheManager.replaceCache(purgeFuture, Collections.singletonList(finalRecord),
+                            clusterCacheManagerImpl.replaceCache(purgeFuture, Collections.singletonList(finalRecord),
                                     shortCacheIdSupplier,
                                     cacheIdSupplier);
                         } catch (Exception e) {
@@ -218,7 +218,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                     }
                 });
 
-                cacheManager.replaceCache(purgeFuture, Collections.singletonList(newerVersion),
+                clusterCacheManagerImpl.replaceCache(purgeFuture, Collections.singletonList(newerVersion),
                         shortCacheIdSupplier, cacheIdSupplier);
                 if (logger.isDebugEnabled()) { logger.debug("Update " + counter + " performed successfully!"); }
             } else {
@@ -240,7 +240,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                     }
                 });
 
-                cacheManager.replaceCache(purgeFuture, Collections.singletonList(updatedRecord),
+                clusterCacheManagerImpl.replaceCache(purgeFuture, Collections.singletonList(updatedRecord),
                         shortCacheIdSupplier, cacheIdSupplier);
                 if (logger.isDebugEnabled()) { logger.debug("Immediate remoteUpdate performed!"); }
             }

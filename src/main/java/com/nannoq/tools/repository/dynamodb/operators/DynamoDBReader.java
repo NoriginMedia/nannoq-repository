@@ -34,8 +34,8 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.CacheManager;
-import com.nannoq.tools.repository.repository.RedisUtils;
+import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
+import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
 import com.nannoq.tools.repository.utils.FilterParameter;
@@ -48,10 +48,10 @@ import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.Logger;
-import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import io.vertx.serviceproxy.ServiceException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Field;
 import java.util.*;
@@ -69,7 +69,7 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LoggerFactory.getLogger(DynamoDBReader.class.getSimpleName());
+    private static final Logger logger = LogManager.getLogger(DynamoDBReader.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final Vertx vertx;
@@ -84,7 +84,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
     private final Map<String, JsonObject> GSI_KEY_MAP;
 
     private final DynamoDBParameters<E> dbParams;
-    private final CacheManager<E> cacheManager;
+    private final ClusterCacheManagerImpl<E> clusterCacheManagerImpl;
 
     private final int coreNum = Runtime.getRuntime().availableProcessors() * 2;
 
@@ -93,7 +93,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
     public DynamoDBReader(Class<E> type, Vertx vertx, DynamoDBRepository<E> db, String COLLECTION,
                           String HASH_IDENTIFIER, String IDENTIFIER, String PAGINATION_IDENTIFIER,
                           Map<String, JsonObject> GSI_KEY_MAP,
-                          DynamoDBParameters<E> dbParams, CacheManager<E> cacheManager) {
+                          DynamoDBParameters<E> dbParams, ClusterCacheManagerImpl<E> clusterCacheManagerImpl) {
         TYPE = type;
         this.vertx = vertx;
         this.db = db;
@@ -105,7 +105,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         this.REDIS_CLIENT = db.getRedisClient();
         this.GSI_KEY_MAP = GSI_KEY_MAP;
         this.dbParams = dbParams;
-        this.cacheManager = cacheManager;
+        this.clusterCacheManagerImpl = clusterCacheManagerImpl;
     }
 
     public void read(JsonObject identifiers, Handler<AsyncResult<ItemResult<E>>> resultHandler) {
@@ -120,7 +120,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         String cacheBase = TYPE.getSimpleName() + "_" + hash + (range == null ? "" : "/" + range);
         String cacheId = "FULL_CACHE_" + cacheBase;
 
-        vertx.<E>executeBlocking(future -> cacheManager.checkObjectCache(cacheId, result -> {
+        vertx.<E>executeBlocking(future -> clusterCacheManagerImpl.checkObjectCache(cacheId, result -> {
             if (result.failed()) {
                 future.fail(result.cause());
             } else {
@@ -135,8 +135,8 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 vertx.<E>executeBlocking(future -> {
                     E item = fetchItem(startTime, preOperationTime, operationTime, hash, range, true);
 
-                    if (item != null && cacheManager.isObjectCacheAvailable()) {
-                        cacheManager.replaceObjectCache(cacheBase, item, future, new String[]{});
+                    if (item != null && clusterCacheManagerImpl.isObjectCacheAvailable()) {
+                        clusterCacheManagerImpl.replaceObjectCache(cacheBase, item, future, new String[]{});
                     } else {
                         if (item == null) {
                             future.fail(new NoSuchElementException());
@@ -183,7 +183,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         String cacheId = TYPE.getSimpleName() + "_" + hash + (range == null ? "" : "/" + range) +
                 ((projections != null && projections.length > 0) ? "/projection/" + Arrays.hashCode(projections) : "");
 
-        vertx.<E>executeBlocking(future -> cacheManager.checkObjectCache(cacheId, result -> {
+        vertx.<E>executeBlocking(future -> clusterCacheManagerImpl.checkObjectCache(cacheId, result -> {
             if (result.failed()) {
                 future.fail(result.cause());
             } else {
@@ -214,8 +214,8 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                         }));
                     }
 
-                    if (item != null && cacheManager.isObjectCacheAvailable()) {
-                        cacheManager.replaceObjectCache(cacheId, item, future, projections == null ? new String[]{} : projections);
+                    if (item != null && clusterCacheManagerImpl.isObjectCacheAvailable()) {
+                        clusterCacheManagerImpl.replaceObjectCache(cacheId, item, future, projections == null ? new String[]{} : projections);
                     } else {
                         if (item == null) {
                             future.fail(new NoSuchElementException());
@@ -470,7 +470,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
         if (logger.isDebugEnabled()) { logger.debug("Running readAll with: " + hash + " : " + cacheId); }
 
-        vertx.<ItemList<E>>executeBlocking(future -> cacheManager.checkItemListCache(cacheId, projections, result -> {
+        vertx.<ItemList<E>>executeBlocking(future -> clusterCacheManagerImpl.checkItemListCache(cacheId, projections, result -> {
             if (result.failed()) {
                 future.fail(result.cause());
             } else {
@@ -566,7 +566,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                         }
                         Future<Boolean> itemListCacheFuture = Future.future();
 
-                        if (cacheManager.isItemListCacheAvailable()) {
+                        if (clusterCacheManagerImpl.isItemListCacheAvailable()) {
                             if (logger.isDebugEnabled()) {
                                 logger.debug("Constructing cache!");
                             }
@@ -583,7 +583,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                                 logger.debug("Cache encoded!");
                             }
 
-                            cacheManager.replaceItemListCache(content, () -> cacheId, cacheRes -> {
+                            clusterCacheManagerImpl.replaceItemListCache(content, () -> cacheId, cacheRes -> {
                                 if (logger.isDebugEnabled()) {
                                     logger.debug("Setting: " + etagKey + " with: " + itemList.getEtag());
                                 }
