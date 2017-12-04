@@ -1,37 +1,21 @@
-## Welcome to GitHub Pages
+## Welcome to Nannoq Repository
 
-You can use the [editor on GitHub](https://github.com/mikand13/nannoq-repository/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
+nannoq-repository is a collection of repository implementations for Vert.x. All repositories operate with a unified querying interface that abstracts away the underlying data store. Individual implementations will be extended for any data store specific functionality that is not reasonable to abstract away.
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+### Prerequisites
 
-### Markdown
+Vert.x >= 3.5.0
+Java >= 1.8
+Maven
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+### Installing
 
-```markdown
-Syntax highlighted code block
+mvn clean package -Dgpg.skip=true
 
-# Header 1
-## Header 2
-### Header 3
+## Running the tests
 
-- Bulleted
-- List
+mvn clean test -Dgpg.skip=true
 
-1. Numbered
-2. List
+## Running the integration tests
 
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
-```
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/mikand13/nannoq-repository/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+mvn clean verify -Dgpg.skip=true
