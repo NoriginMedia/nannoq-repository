@@ -1118,10 +1118,14 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
             public void onSuccess(ListTablesRequest request, ListTablesResult listTablesResult) {
                 boolean tableExists = listTablesResult.getTableNames().contains(COLLECTION);
 
-                if (logger.isDebugEnabled()) { logger.debug("Table is available: " + tableExists); }
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Table is available: " + tableExists);
+                }
 
                 if (tableExists) {
-                    if (logger.isDebugEnabled()) { logger.debug("Table exists for: " + COLLECTION + ", doing nothing..."); }
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Table exists for: " + COLLECTION + ", doing nothing...");
+                    }
 
                     resultHandler.handle(Future.succeededFuture());
                 } else {
@@ -1130,24 +1134,32 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                                     .withWriteCapacityUnits(DEFAULT_WRITE_TABLE)
                                     .withReadCapacityUnits(DEFAULT_READ_TABLE));
 
+                    final Projection allProjection = new Projection().withProjectionType(ProjectionType.ALL);
+                    req.setLocalSecondaryIndexes(req.getLocalSecondaryIndexes().stream()
+                            .peek(lsi -> lsi.setProjection(allProjection))
+                            .collect(toList()));
                     setAnyGlobalSecondaryIndexes(req, DEFAULT_READ_GSI, DEFAULT_WRITE_GSI);
 
                     client.createTableAsync(req, new AsyncHandler<CreateTableRequest, CreateTableResult>() {
                         @Override
                         public void onError(Exception e) {
                             logger.error(e + " : " + e.getMessage() + " : " + Arrays.toString(e.getStackTrace()));
-                            if (logger.isDebugEnabled()) { logger.debug("Could not remoteCreate table for: " + COLLECTION); }
+                            if (logger.isDebugEnabled()) {
+                                logger.debug("Could not remoteCreate table for: " + COLLECTION);
+                            }
 
                             resultHandler.handle(Future.failedFuture(e));
                         }
 
                         @Override
                         public void onSuccess(CreateTableRequest request, CreateTableResult createTableResult) {
-                            if (logger.isDebugEnabled()) { logger.debug("Table creation for: " + COLLECTION + " is success: " +
-                                    createTableResult.getTableDescription()
-                                            .getTableName()
+                            if (logger.isDebugEnabled()) {
+                                logger.debug("Table creation for: " + COLLECTION + " is success: " +
+                                        createTableResult.getTableDescription()
+                                                .getTableName()
 
-                                            .equals(COLLECTION)); }
+                                                .equals(COLLECTION));
+                            }
 
                             waitForTableAvailable(createTableResult, res -> {
                                 if (res.failed()) {
@@ -1195,7 +1207,10 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
                 final DescribeTableResult describeTableResult = client.describeTable(tableName);
 
-                if (describeTableResult.getTable().getTableStatus().equalsIgnoreCase("ACTIVE")) {
+                if (tableReady(describeTableResult)) {
+                    logger.debug(tableName + " created and active: " + Json.encodePrettily(
+                            describeTableResult.getTable()));
+
                     resultHandler.handle(Future.succeededFuture());
                 } else {
                     Handler<AsyncResult<Void>> resHandle = res -> {
@@ -1208,6 +1223,12 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
                     waitForActive(tableName, resHandle);
                 }
+            }
+
+            private boolean tableReady(DescribeTableResult describeTableResult) {
+                return describeTableResult.getTable().getTableStatus().equalsIgnoreCase("ACTIVE") &&
+                        describeTableResult.getTable().getGlobalSecondaryIndexes().stream()
+                                .allMatch(i -> i.getIndexStatus().equals("ACTIVE"));
             }
 
             private void waitForActive(String tableName, Handler<AsyncResult<Void>> resHandle) {

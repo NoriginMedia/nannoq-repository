@@ -578,6 +578,7 @@
                                 <argument>dynamodb/DynamoDBLocal.jar</argument>
                                 <argument>-port</argument>
                                 <argument>${dynamodblocal.port}</argument>
+                                <argument>-delayTransientStatuses</argument>
                                 <argument>-sharedDb</argument>
                                 <argument>-inMemory</argument>
                             </arguments>

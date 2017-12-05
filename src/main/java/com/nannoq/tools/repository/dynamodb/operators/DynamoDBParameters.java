@@ -36,11 +36,10 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
+import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.utils.FilterParameter;
 import com.nannoq.tools.repository.utils.OrderByParameter;
-import io.vertx.core.json.Json;
-import io.vertx.core.json.JsonArray;
-import io.vertx.core.json.JsonObject;
+import io.vertx.core.json.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -764,25 +763,31 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                                                    String GSI,
                                                    Map<String, JsonObject> GSI_KEY_MAP) {
         Map<String, AttributeValue> pageTokenMap = null;
-        String pageToken = null;
+        JsonObject pageToken = null;
 
         if (encodedPageToken != null) {
-            pageToken = new String(Base64.getUrlDecoder().decode(encodedPageToken));
+            try {
+                pageToken = new JsonObject(new String(Base64.getUrlDecoder().decode(encodedPageToken)));
+            } catch (EncodeException | DecodeException e) {
+                pageToken = null;
+            }
         }
 
-        if (pageToken != null && pageToken.contains("/")) {
+        if (pageToken != null) {
             pageTokenMap = new HashMap<>();
-            String[] pageTokenArray = pageToken.split("/");
-            AttributeValue hashValue = new AttributeValue().withS(pageTokenArray[0]);
-            pageTokenMap.putIfAbsent(hashIdentifier, hashValue);
 
-            if (rangeIdentifier != null && !rangeIdentifier.equals("")) {
-                AttributeValue rangeValue = new AttributeValue().withS(pageTokenArray[1]);
+            if (pageToken.getString("hash") != null) {
+                AttributeValue hashValue = new AttributeValue().withS(pageToken.getString("hash"));
+                pageTokenMap.putIfAbsent(hashIdentifier, hashValue);
+            }
+
+            if (rangeIdentifier != null && !rangeIdentifier.equals("") && pageToken.getString("range") != null) {
+                AttributeValue rangeValue = new AttributeValue().withS(pageToken.getString("range"));
                 pageTokenMap.putIfAbsent(rangeIdentifier, rangeValue);
             }
 
-            if (paginationIdentifier != null && !paginationIdentifier.equals("")) {
-                AttributeValue pageValue = db.createAttributeValue(paginationIdentifier, pageTokenArray[2]);
+            if (paginationIdentifier != null && !paginationIdentifier.equals("") && pageToken.getString("indexValue") != null) {
+                AttributeValue pageValue = db.createAttributeValue(paginationIdentifier, pageToken.getString("indexValue"));
                 pageTokenMap.putIfAbsent(paginationIdentifier, pageValue);
             }
 
@@ -791,18 +796,20 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                 final String hash = keyObject.getString("hash");
                 final String range = keyObject.getString("range");
 
-                AttributeValue gsiHash = new AttributeValue().withS(pageTokenArray[3]);
-                pageTokenMap.putIfAbsent(hash, gsiHash);
+                if (pageToken.getString("GSIH") != null) {
+                    AttributeValue gsiHash = new AttributeValue().withS(pageToken.getString("GSIH"));
+                    pageTokenMap.putIfAbsent(hash, gsiHash);
+                }
 
-                if (range != null && pageTokenArray.length > 4) {
-                    AttributeValue gsiRange = new AttributeValue().withS(pageTokenArray[4]);
+                if (range != null && pageToken.getString("GSIR") != null) {
+                    AttributeValue gsiRange = new AttributeValue().withS(pageToken.getString("GSIR"));
                     pageTokenMap.putIfAbsent(range, gsiRange);
                 }
             }
-        } else if (pageToken != null) {
-            AttributeValue hashValue = new AttributeValue().withS(pageToken);
-            pageTokenMap = new HashMap<>();
-            pageTokenMap.putIfAbsent(hashIdentifier, hashValue);
+        }
+
+        if (logger.isDebugEnabled()) {
+            logger.debug("PageTokenMap is: " + Json.encodePrettily(pageTokenMap));
         }
 
         return pageTokenMap;
@@ -813,6 +820,7 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                               Map<String, JsonObject> GSI_KEY_MAP, String alternateIndex) {
         if (logger.isDebugEnabled()) { logger.debug("Last key is: " + lastEvaluatedKey); }
 
+        JsonObject pageToken = new JsonObject();
         Object indexValue;
 
         if (index == null && alternateIndex == null) {
@@ -825,24 +833,27 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
         if (logger.isDebugEnabled()) { logger.debug("Index value is: " + indexValue); }
 
         final AttributeValue identifierValue = lastEvaluatedKey.get(identifier);
-
-        String newPageToken = lastEvaluatedKey.get(hashIdentifier).getS() +
-                (identifierValue == null ? "" : "/" + identifierValue.getS()) + (indexValue == null ? "" :
-                "/" + indexValue);
+        pageToken.put("hash", lastEvaluatedKey.get(hashIdentifier).getS());
+        if (identifierValue != null) pageToken.put("range", identifierValue.getS());
+        if (indexValue != null) pageToken.put("indexValue", indexValue);
 
         if (GSI != null) {
             final JsonObject keyObject = GSI_KEY_MAP.get(GSI);
             final String hash = keyObject.getString("hash");
             final String range = keyObject.getString("range");
 
-            newPageToken += "/" + lastEvaluatedKey.get(hash).getS();
+            pageToken.put("GSIH", lastEvaluatedKey.get(hash).getS());
 
             if (range != null && lastEvaluatedKey.get(range) != null) {
-                newPageToken += "/" + lastEvaluatedKey.get(range).getS();
+                pageToken.put("GSIR", lastEvaluatedKey.get(range).getS());
             }
         }
 
-        return Base64.getUrlEncoder().encodeToString(newPageToken.getBytes());
+        if (logger.isDebugEnabled()) {
+            logger.debug("PageToken is: " + pageToken.encodePrettily());
+        }
+
+        return Base64.getUrlEncoder().encodeToString(pageToken.encode().getBytes());
     }
 
     private Object extractIndexValue(AttributeValue attributeValue) {

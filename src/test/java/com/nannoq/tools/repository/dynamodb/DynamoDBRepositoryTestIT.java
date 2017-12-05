@@ -31,7 +31,9 @@ import com.amazonaws.services.dynamodbv2.datamodeling.S3Link;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.hazelcast.config.Config;
 import com.nannoq.tools.repository.dynamodb.model.TestModel;
-import com.nannoq.tools.repository.repository.Repository;
+import com.nannoq.tools.repository.dynamodb.model.TestModelDynamoDBRepository;
+import com.nannoq.tools.repository.dynamodb.service.TestModelInternalService;
+import com.nannoq.tools.repository.dynamodb.service.TestModelInternalServiceVertxProxyHandler;
 import com.nannoq.tools.repository.repository.results.CreateResult;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
@@ -40,6 +42,8 @@ import com.nannoq.tools.repository.utils.AggregateFunctions;
 import com.nannoq.tools.repository.utils.FilterParameter;
 import com.nannoq.tools.repository.utils.QueryPack;
 import io.vertx.core.*;
+import io.vertx.core.Future;
+import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
@@ -47,8 +51,8 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
+import io.vertx.serviceproxy.ProxyHelper;
 import io.vertx.spi.cluster.hazelcast.HazelcastClusterManager;
-import javafx.beans.binding.ListExpression;
 import org.junit.*;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
@@ -58,16 +62,13 @@ import java.lang.reflect.Field;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
-import static com.nannoq.tools.repository.repository.Repository.logger;
 import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.*;
 
@@ -95,11 +96,14 @@ public class DynamoDBRepositoryTestIT {
             .setSomeStringTwo("testStringRange")
             .setSomeStringThree("testStringThree")
             .setSomeLong(1L)
-            .setSomeDate(testDate);
+            .setSomeDate(testDate)
+            .setSomeDateTwo(new Date());
 
     private static Vertx vertx;
     private RedisServer redisServer;
-    private DynamoDBRepository<TestModel> repo;
+    private TestModelDynamoDBRepository repo;
+    private MessageConsumer<JsonObject> serviceRegistration;
+    private TestModelInternalService service;
     private final String tableName = TestModel.class.getAnnotation(DynamoDBTable.class).tableName();
     private final Map<String, Class> testMap = Collections.singletonMap(tableName, TestModel.class);
 
@@ -143,7 +147,9 @@ public class DynamoDBRepositoryTestIT {
             if (res.failed()) {
                 testContext.fail(res.cause());
             } else {
-                repo = new DynamoDBRepository<>(vertx, TestModel.class, config);
+                repo = new TestModelDynamoDBRepository(vertx, config);
+                serviceRegistration = ProxyHelper.registerService(TestModelInternalService.class, vertx, repo, "REPO");
+                service = ProxyHelper.createProxy(TestModelInternalService.class, vertx, "REPO");
             }
 
             long redisChecker = System.currentTimeMillis();
@@ -161,7 +167,9 @@ public class DynamoDBRepositoryTestIT {
     }
 
     @After
-    public void tearDown() {
+    public void tearDown(TestContext testContext) {
+        Async async = testContext.async();
+
         final AmazonDynamoDBAsyncClient amazonDynamoDBAsyncClient = new AmazonDynamoDBAsyncClient();
         amazonDynamoDBAsyncClient.withEndpoint(config.getString("dynamo_endpoint"));
         amazonDynamoDBAsyncClient.deleteTable(tableName);
@@ -169,7 +177,10 @@ public class DynamoDBRepositoryTestIT {
         repo = null;
         redisServer.stop();
         redisServer = null;
-
+        serviceRegistration.unregister(unregRes -> {
+            service = null;
+            async.complete();
+        });
 
         logger.info("Closing " + name.getMethodName());
     }
@@ -178,8 +189,22 @@ public class DynamoDBRepositoryTestIT {
         final List<TestModel> items = new ArrayList<>();
         List<Future> futures = new CopyOnWriteArrayList<>();
 
-        IntStream.range(0, count).forEach(i ->
-                items.add((TestModel) nonNullTestModel.get().setRange(UUID.randomUUID().toString())));
+        IntStream.range(0, count).forEach(i -> {
+            TestModel testModel = (TestModel) nonNullTestModel.get().setRange(UUID.randomUUID().toString());
+
+            LocalDate startDate = LocalDate.of(1990, 1, 1);
+            LocalDate endDate = LocalDate.now();
+            long start = startDate.toEpochDay();
+            long end = endDate.toEpochDay();
+
+            @SuppressWarnings("ConstantConditions")
+            long randomEpochDay = ThreadLocalRandom.current().longs(start, end).findAny().getAsLong();
+
+            testModel.setSomeDate(new Date(randomEpochDay + 1000L));
+            testModel.setSomeDateTwo(new Date(randomEpochDay));
+
+            items.add(testModel);
+        });
 
         items.forEach(item -> {
             Future<CreateResult<TestModel>> future = Future.future();
@@ -381,6 +406,71 @@ public class DynamoDBRepositoryTestIT {
                 async.complete();
             });
         });
+    }
+
+    @Test
+    public void create(TestContext testContext) {
+        Async async = testContext.async();
+
+        repo.create(nonNullTestModel.get(), createRes -> {
+            testContext.assertTrue(createRes.succeeded());
+            testContext.assertEquals(createRes.result().getItem().getHash(), nonNullTestModel.get().getHash());
+            testContext.assertEquals(createRes.result().getItem().getRange(), nonNullTestModel.get().getRange());
+
+            async.complete();
+        });
+    }
+
+    @Test
+    public void update(TestContext testContext) {
+        Async async = testContext.async();
+
+        repo.create(nonNullTestModel.get(), createRes -> {
+            testContext.assertTrue(createRes.succeeded());
+            testContext.assertEquals(createRes.result().getItem().getHash(), nonNullTestModel.get().getHash());
+            testContext.assertEquals(createRes.result().getItem().getRange(), nonNullTestModel.get().getRange());
+
+            Date testDate = new Date();
+            repo.update(createRes.result().getItem(), tm -> tm.setSomeDateTwo(testDate), updateResultAsyncResult -> {
+                testContext.assertTrue(updateResultAsyncResult.succeeded());
+                testContext.assertNotEquals(updateResultAsyncResult.result().getItem(), nonNullTestModel.get());
+                testContext.assertEquals(testDate, updateResultAsyncResult.result().getItem().getSomeDateTwo());
+
+                async.complete();
+            });
+        });
+    }
+
+    @Test
+    public void delete(TestContext testContext) {
+        Async async = testContext.async();
+        final List<Future> futureList = new CopyOnWriteArrayList<>();
+
+        createXItems(20, res -> {
+            testContext.assertTrue(res.succeeded());
+
+            res.result().stream().parallel().forEach(cr -> {
+                final Future<Void> future = Future.future();
+                final TestModel testModel = cr.getItem();
+                final JsonObject id = new JsonObject()
+                        .put("hash", testModel.getHash())
+                        .put("range", testModel.getRange());
+
+                repo.delete(id, deleteRes -> {
+                    testContext.assertTrue(deleteRes.succeeded());
+
+                    repo.read(id, readRes -> {
+                        testContext.assertFalse(readRes.succeeded());
+
+                        future.tryComplete();
+                    });
+                });
+
+                futureList.add(future);
+            });
+        });
+
+        CompositeFuture.all(futureList).setHandler(res -> async.complete());
     }
 
     @Test
@@ -643,9 +733,6 @@ public class DynamoDBRepositoryTestIT {
 
             repo.aggregation(idObject, queryPack, new String[]{}, "TEST_GSI", res -> {
                 final JsonObject results = new JsonObject(res.result());
-
-                Repository.logger.info("Results is: " + results.encodePrettily());
-
                 final Integer count = results.getInteger("count");
 
                 testContext.assertEquals(100, count, "Count is: " + count);
@@ -780,10 +867,68 @@ public class DynamoDBRepositoryTestIT {
     public void readAllPaginated(TestContext testContext) {
         Async async = testContext.async();
 
-        createXItems(100, allItemsRes -> {
-            repo.readAllPaginated(allItems -> {
-                testContext.assertTrue(allItems.succeeded());
-                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+        createXItems(100, allItemsRes -> repo.readAllPaginated(allItems -> {
+            testContext.assertTrue(allItems.succeeded());
+            testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+
+            async.complete();
+        }));
+    }
+
+    @Test
+    public void remoteCreate(TestContext testContext) {
+        Async async = testContext.async();
+
+        service.remoteCreate(nonNullTestModel.get(), createRes -> {
+            testContext.assertTrue(createRes.succeeded());
+            testContext.assertEquals(createRes.result().getHash(), nonNullTestModel.get().getHash());
+            testContext.assertEquals(createRes.result().getRange(), nonNullTestModel.get().getRange());
+
+            async.complete();
+        });
+    }
+
+    @Test
+    public void remoteRead(TestContext testContext) {
+        Async async = testContext.async();
+        final List<Future> futureList = new CopyOnWriteArrayList<>();
+
+        createXItems(20, res -> {
+            testContext.assertTrue(res.succeeded());
+
+            res.result().stream().parallel().forEach(cr -> {
+                final Future<Void> future = Future.future();
+                final TestModel testModel = cr.getItem();
+                final JsonObject id = new JsonObject()
+                        .put("hash", testModel.getHash())
+                        .put("range", testModel.getRange());
+
+                service.remoteRead(id, firstRead -> {
+                    testContext.assertTrue(firstRead.succeeded());
+
+                    future.tryComplete();
+                });
+
+                futureList.add(future);
+            });
+        });
+
+        CompositeFuture.all(futureList).setHandler(res -> async.complete());
+    }
+
+    @Test
+    public void remoteIndex(TestContext testContext) {
+        Async async = testContext.async();
+
+        createXItems(100, res -> {
+            testContext.assertTrue(res.succeeded());
+            final JsonObject idObject = new JsonObject()
+                    .put("hash", "testString");
+
+            service.remoteIndex(idObject, allItemsRes -> {
+                testContext.assertTrue(allItemsRes.succeeded());
+                testContext.assertTrue(allItemsRes.result().size() == 100,
+                        "Actual count: " + allItemsRes.result().size());
 
                 async.complete();
             });
@@ -791,38 +936,48 @@ public class DynamoDBRepositoryTestIT {
     }
 
     @Test
-    public void remoteCreate(TestContext testContext) {
-        Async async = testContext.async();
-
-        async.complete();
-    }
-
-    @Test
-    public void remoteRead(TestContext testContext) {
-        Async async = testContext.async();
-
-        async.complete();
-    }
-
-    @Test
-    public void remoteIndex(TestContext testContext) {
-        Async async = testContext.async();
-
-        async.complete();
-    }
-
-    @Test
     public void remoteUpdate(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        service.remoteCreate(nonNullTestModel.get(), createRes -> {
+            testContext.assertTrue(createRes.succeeded());
+            testContext.assertEquals(createRes.result().getHash(), nonNullTestModel.get().getHash());
+            testContext.assertEquals(createRes.result().getRange(), nonNullTestModel.get().getRange());
+
+            Date testDate = new Date();
+            final TestModel result = createRes.result();
+            result.setSomeDateTwo(testDate);
+            service.remoteUpdate(result, updateRes -> {
+                testContext.assertTrue(updateRes.succeeded());
+                testContext.assertEquals(updateRes.result().getSomeDateTwo(), testDate);
+
+                async.complete();
+            });
+        });
     }
 
     @Test
     public void remoteDelete(TestContext testContext) {
         Async async = testContext.async();
 
-        async.complete();
+        service.remoteCreate(nonNullTestModel.get(), createRes -> {
+            testContext.assertTrue(createRes.succeeded());
+            testContext.assertEquals(createRes.result().getHash(), nonNullTestModel.get().getHash());
+            testContext.assertEquals(createRes.result().getRange(), nonNullTestModel.get().getRange());
+            final JsonObject id = new JsonObject()
+                    .put("hash", createRes.result().getHash())
+                    .put("range", createRes.result().getRange());
+
+            service.remoteDelete(id, deleteRes -> {
+                testContext.assertTrue(deleteRes.succeeded());
+
+                service.remoteRead(id, res -> {
+                    testContext.assertFalse(res.succeeded());
+
+                    async.complete();
+                });
+            });
+        });
     }
 
     @Test

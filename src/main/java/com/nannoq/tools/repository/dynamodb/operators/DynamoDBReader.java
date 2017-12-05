@@ -1401,7 +1401,8 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 items.loadAllResults();
 
                 if (logger.isDebugEnabled()) {
-                    logger.debug("Results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
+                    logger.debug(items.size() +
+                            " results received in: " + (System.currentTimeMillis() - timeBefore) + " ms");
                 }
 
                 future.complete(items);

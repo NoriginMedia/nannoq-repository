@@ -29,7 +29,7 @@
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-@ModuleGen(name = "NannoqRepositoryModelsTest", groupPackage="com.nannoq.tools.repository.dynamodb.model")
-package com.nannoq.tools.repository.dynamodb.model;
+@ModuleGen(name = "NannoqRepositoryServicesTest", groupPackage="com.nannoq.tools.repository.dynamodb.service")
+package com.nannoq.tools.repository.dynamodb.service;
 
 import io.vertx.codegen.annotations.ModuleGen;
