@@ -115,7 +115,8 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
         String hash = identifiers.getString("hash");
         String range = identifiers.getString("range");
-        String cacheBase = TYPE.getSimpleName() + "_" + hash + (range == null ? "" : "/" + range);
+        String cacheBase = TYPE.getSimpleName() + "_" + hash + (range == null ?
+                (db.hasRangeKey() ? "/null" : "") : "/" + range);
         String cacheId = "FULL_CACHE_" + cacheBase;
 
         vertx.<E>executeBlocking(future -> cacheManager.checkObjectCache(cacheId, result -> {
@@ -232,8 +233,16 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
     private E fetchItem(AtomicLong startTime, AtomicLong preOperationTime, AtomicLong operationTime,
                         String hash, String range, boolean consistent) {
         try {
-            if (range != null && db.hasRangeKey()) {
-                return fetchHashAndRangeItem(hash, range, startTime, preOperationTime, operationTime);
+            if (db.hasRangeKey()) {
+                if (range == null) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Loading ranged item without range key!");
+                    }
+
+                    return null;
+                } else {
+                    return fetchHashAndRangeItem(hash, range, startTime, preOperationTime, operationTime);
+                }
             } else {
                 return fetchHashItem(hash, startTime, preOperationTime, operationTime, consistent);
             }

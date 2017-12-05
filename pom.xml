@@ -52,10 +52,10 @@
         <maven.gpg.version>1.6</maven.gpg.version>
         <maven.helper.version>3.0.0</maven.helper.version>
         <maven.failsafe.version>2.20.1</maven.failsafe.version>
-        <sonatype.staging>1.6.8</sonatype.staging>
-        <aws.s3.region>us-west-2</aws.s3.region>
         <download.maven.plugin>1.4.0</download.maven.plugin>
+        <aws.s3.region>us-west-2</aws.s3.region>
         <process.exec.maven>0.8</process.exec.maven>
+        <sonatype.staging>1.6.8</sonatype.staging>
     </properties>
 
     <dependencies>

@@ -119,20 +119,20 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private Map<String, Type> typeMap = new ConcurrentHashMap<>();
 
     public DynamoDBRepository(Class<E> type, JsonObject appConfig) {
-        this(null, type, appConfig, null, null);
+        this(Vertx.currentContext().owner(), type, appConfig, null, null);
     }
 
     public DynamoDBRepository(Class<E> type, JsonObject appConfig, @Nullable CacheManager<E> cacheManager) {
-        this(null, type, appConfig, cacheManager, null);
+        this(Vertx.currentContext().owner(), type, appConfig, cacheManager, null);
     }
 
     public DynamoDBRepository(Class<E> type, JsonObject appConfig, @Nullable ETagManager<E> eTagManager) {
-        this(null, type, appConfig, null, eTagManager);
+        this(Vertx.currentContext().owner(), type, appConfig, null, eTagManager);
     }
 
     public DynamoDBRepository(Class<E> type, JsonObject appConfig,
                               @Nullable CacheManager<E> cacheManager, @Nullable ETagManager<E> eTagManager) {
-        this(null, type, appConfig, cacheManager, eTagManager);
+        this(Vertx.currentContext().owner(), type, appConfig, cacheManager, eTagManager);
     }
 
     public DynamoDBRepository(Vertx vertx, Class<E> type, JsonObject appConfig) {
@@ -148,6 +148,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                               @Nullable ETagManager<E> eTagManager) {
         this(vertx, type, appConfig, null, eTagManager);
     }
+
     @SuppressWarnings("unchecked")
     public DynamoDBRepository(Vertx vertx, Class<E> type, JsonObject appConfig,
                               @Nullable CacheManager<E> cacheManager, @Nullable ETagManager<E> eTagManager) {
