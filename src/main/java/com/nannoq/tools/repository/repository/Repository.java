@@ -25,7 +25,6 @@
 
 package com.nannoq.tools.repository.repository;
 
-import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.models.ModelUtils;
 import com.nannoq.tools.repository.repository.results.*;
@@ -40,7 +39,6 @@ import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
-import io.vertx.redis.RedisClient;
 import io.vertx.serviceproxy.ServiceException;
 
 import java.lang.reflect.Field;
@@ -48,7 +46,6 @@ import java.lang.reflect.Method;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 

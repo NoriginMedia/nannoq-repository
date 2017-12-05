@@ -25,7 +25,6 @@
 
 package com.nannoq.tools.repository.repository.results;
 
-import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 
 /**

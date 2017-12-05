@@ -7,11 +7,12 @@ import io.vertx.codegen.annotations.DataObject;
 import io.vertx.codegen.annotations.Fluent;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.logging.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
 
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
 import static com.nannoq.tools.repository.dynamodb.model.TestModelConverter.fromJson;

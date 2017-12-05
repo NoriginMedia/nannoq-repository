@@ -36,7 +36,6 @@ import com.nannoq.tools.repository.models.Cacheable;
 import com.nannoq.tools.repository.models.DynamoDBModel;
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.utils.FilterParameter;
 import com.nannoq.tools.repository.utils.OrderByParameter;
 import io.vertx.core.json.*;

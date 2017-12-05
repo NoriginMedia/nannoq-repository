@@ -2,7 +2,6 @@ package com.nannoq.tools.repository.dynamodb.model;
 
 import com.nannoq.tools.repository.dynamodb.DynamoDBRepository;
 import com.nannoq.tools.repository.dynamodb.service.TestModelInternalService;
-import com.nannoq.tools.repository.services.internal.InternalRepositoryService;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
