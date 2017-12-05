@@ -111,6 +111,7 @@ public class DynamoDBRepositoryTestIT {
 
     @Rule public TestName name = new TestName();
 
+    @SuppressWarnings("Duplicates")
     @BeforeClass
     public static void setUpClass(TestContext testContext) {
         Async async = testContext.async();
@@ -123,7 +124,7 @@ public class DynamoDBRepositoryTestIT {
 
         Vertx.clusteredVertx(options, clustered -> {
             if (clustered.failed()) {
-                System.out.println("Vertx not able to cluster!");
+                logger.error("Vertx not able to cluster!");
 
                 System.exit(-1);
             } else {
@@ -187,6 +188,7 @@ public class DynamoDBRepositoryTestIT {
         logger.info("Closing " + name.getMethodName());
     }
 
+    @SuppressWarnings("Duplicates")
     private void createXItems(int count, Handler<AsyncResult<List<CreateResult<TestModel>>>> resultHandler) {
         final List<TestModel> items = new ArrayList<>();
         List<Future> futures = new CopyOnWriteArrayList<>();
@@ -235,6 +237,7 @@ public class DynamoDBRepositoryTestIT {
         });
     }
 
+    @SuppressWarnings("Duplicates")
     @AfterClass
     public static void tearDownClass(TestContext testContext) {
         Async async = testContext.async();

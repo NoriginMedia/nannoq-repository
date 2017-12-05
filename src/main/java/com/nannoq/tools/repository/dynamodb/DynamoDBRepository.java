@@ -43,6 +43,7 @@ import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.repository.Repository;
 import com.nannoq.tools.repository.repository.cache.CacheManager;
 import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
+import com.nannoq.tools.repository.repository.cache.LocalCacheManagerImpl;
 import com.nannoq.tools.repository.repository.etag.ETagManager;
 import com.nannoq.tools.repository.repository.etag.RedisETagManagerImpl;
 import com.nannoq.tools.repository.repository.redis.RedisUtils;
@@ -200,8 +201,11 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         if (cacheManager != null) {
             this.cacheManager = cacheManager;
             isCached = true;
-        } else {
+        } else if (vertx.isClustered()) {
             this.cacheManager = new ClusterCacheManagerImpl<>(type, vertx);
+            isCached = true;
+        } else {
+            this.cacheManager = new LocalCacheManagerImpl<>(type, vertx);
             isCached = true;
         }
 
