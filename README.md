@@ -1,8 +1,8 @@
-## Welcome to Nannoq Repository
+# Nannoq Repository
 
 nannoq-repository is a collection of repository implementations for Vert.x. All repositories operate with a unified querying interface that abstracts away the underlying data store. Individual implementations will be extended for any data store specific functionality that is not reasonable to abstract away.
 
-### Prerequisites
+## Prerequisites
 
 Vert.x >= 3.5.0
 
