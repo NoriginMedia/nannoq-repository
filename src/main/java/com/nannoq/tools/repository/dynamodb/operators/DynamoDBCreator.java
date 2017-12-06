@@ -140,7 +140,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
 
                             DYNAMO_DB_MAPPER.save(finalRecord, buildExistingExpression(finalRecord, false));
                             Future<Boolean> purgeFuture = Future.future();
-                            destroyEtagsAfterCachePurge(writeFuture, finalRecord, purgeFuture, record.getHash());
+                            destroyEtagsAfterCachePurge(writeFuture, finalRecord, purgeFuture);
 
                             cacheManager.replaceCache(purgeFuture, es, shortCacheIdSupplier, cacheIdSupplier);
                         } catch (Exception e) {
@@ -211,7 +211,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                 if (logger.isDebugEnabled()) { logger.debug("Performing " + counter + " remoteUpdate!"); }
                 DYNAMO_DB_MAPPER.save(newerVersion, buildExistingExpression(newerVersion, true));
                 Future<Boolean> purgeFuture = Future.future();
-                destroyEtagsAfterCachePurge(writeFuture, record, purgeFuture, record.getHash());
+                destroyEtagsAfterCachePurge(writeFuture, record, purgeFuture);
 
                 cacheManager.replaceCache(purgeFuture, Collections.singletonList(newerVersion),
                         shortCacheIdSupplier, cacheIdSupplier);
@@ -230,7 +230,7 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                 DYNAMO_DB_MAPPER.save(updatedRecord, buildExistingExpression(record, true));
                 Future<Boolean> purgeFuture = Future.future();
                 purgeFuture.setHandler(purgeRes ->
-                        destroyEtagsAfterCachePurge(writeFuture, record, purgeFuture, record.getHash()));
+                        destroyEtagsAfterCachePurge(writeFuture, record, purgeFuture));
 
                 cacheManager.replaceCache(purgeFuture, Collections.singletonList(updatedRecord),
                         shortCacheIdSupplier, cacheIdSupplier);
@@ -287,15 +287,13 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
         }
     }
 
-    private void destroyEtagsAfterCachePurge(Future<E> writeFuture, E record, Future<Boolean> purgeFuture, String hash) {
-        final JsonObject jsonObject = new JsonObject()
-                .put("hash", record.getHash())
-                .put("range", record.getRange());
+    private void destroyEtagsAfterCachePurge(Future<E> writeFuture, E record, Future<Boolean> purgeFuture) {
+        final int hashId = new JsonObject().put("hash", record.getHash()).encode().hashCode();
 
         purgeFuture.setHandler(purgeRes -> {
             if (purgeRes.failed()) {
                 if (eTagManager != null) {
-                    eTagManager.destroyEtags(new JsonObject().put("hash", record.getHash()).encode().hashCode(), res ->
+                    eTagManager.destroyEtags(hashId, res ->
                             writeFuture.complete(record));
                 } else {
                     writeFuture.complete(record);
@@ -305,9 +303,8 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                     Future<Boolean> removeProjections = Future.future();
                     Future<Boolean> removeETags = Future.future();
 
-                    eTagManager.removeProjectionsEtags(jsonObject.encode().hashCode(), removeProjections.completer());
-                    eTagManager.destroyEtags(new JsonObject()
-                            .put("hash", record.getHash()).encode().hashCode(), removeETags.completer());
+                    eTagManager.removeProjectionsEtags(hashId, removeProjections.completer());
+                    eTagManager.destroyEtags(hashId, removeETags.completer());
 
                     CompositeFuture.all(removeProjections, removeETags).setHandler(res -> {
                         if (res.failed()) {

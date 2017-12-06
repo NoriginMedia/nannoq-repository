@@ -38,17 +38,21 @@ import java.util.List;
  * @version 17.11.2017
  */
 public class ItemListResult<K extends Model> {
+    private String etagBase;
     private int count;
     private List<K> items;
     private String pageToken;
     private String[] projections;
+    private ItemList<K> itemList;
 
     private boolean cacheHit;
     private long preOperationProcessingTime;
     private long operationProcessingTime;
     private long postOperationProcessingTime;
 
-    public ItemListResult(int count, @Nonnull List<K> items, @Nonnull String pageToken, @Nonnull String[] projections, boolean cacheHit) {
+    public ItemListResult(String etagBase, int count, @Nonnull List<K> items, @Nonnull String pageToken,
+                          @Nonnull String[] projections, boolean cacheHit) {
+        this.etagBase = etagBase;
         this.count = count;
         this.items = items;
         this.pageToken = pageToken;
@@ -56,11 +60,8 @@ public class ItemListResult<K extends Model> {
         this.cacheHit = cacheHit;
     }
 
-    public ItemListResult(ItemList<K> itemList, @Nonnull String[] projections, boolean cacheHit) {
-        this.items = itemList.getItems();
-        this.count = itemList.getCount();
-        this.pageToken = itemList.getPageToken();
-        this.projections = projections;
+    public ItemListResult(ItemList<K> itemList, boolean cacheHit) {
+        this.itemList = itemList;
         this.cacheHit = cacheHit;
     }
 
@@ -105,7 +106,11 @@ public class ItemListResult<K extends Model> {
     }
 
     public ItemList<K> getItemList() {
-        return new ItemList<>(pageToken, count, items, projections);
+        if (itemList != null) {
+            return itemList;
+        } else {
+            return new ItemList<>(etagBase, pageToken, count, items, projections);
+        }
     }
 
     public long getPreOperationProcessingTime() {

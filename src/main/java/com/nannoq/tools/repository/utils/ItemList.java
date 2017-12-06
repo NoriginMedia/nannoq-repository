@@ -50,11 +50,11 @@ public class ItemList<E extends Model> {
     public ItemList() {
     }
 
-    public ItemList(String pageToken, int count, List<E> items, @Nonnull String[] projections) {
+    public ItemList(String etagBase, String pageToken, int count, List<E> items, @Nonnull String[] projections) {
         this.pageToken = pageToken;
         this.count = count;
         this.items = items;
-        final long[] etagCode = {1234567890L};
+        final long[] etagCode = {etagBase.hashCode()};
         if (items != null) items.forEach(item -> etagCode[0] = etagCode[0] ^ item.toJsonFormat(projections).encode().hashCode());
         etag = ModelUtils.returnNewEtag(etagCode[0]);
     }

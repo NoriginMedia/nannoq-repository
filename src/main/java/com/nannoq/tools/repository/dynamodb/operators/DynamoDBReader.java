@@ -477,7 +477,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
             }
         }), false, checkResult -> {
             if (checkResult.succeeded()) {
-                resultHandler.handle(Future.succeededFuture(new ItemListResult<>(checkResult.result(), projections, true)));
+                resultHandler.handle(Future.succeededFuture(new ItemListResult<>(checkResult.result(), true)));
 
                 if (logger.isDebugEnabled()) { logger.debug("Served cached version of: " + cacheId); }
             } else {
@@ -540,15 +540,15 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 }
 
                 if (identifiers.isEmpty() || identifiers.getString("hash") == null) {
-                    runRootQuery(multiple, identifiers, hash, queryPack, filteringExpression,
+                    runRootQuery(queryPack.getBaseEtagKey(), multiple, identifiers, hash, queryPack, filteringExpression,
                             GSI, projections, pageToken, unFilteredIndex, alternateIndex, startTime,
                             itemListFuture.completer());
                 } else if (params != null && nameParams != null && dbParams.isIllegalRangedKeyQueryParams(nameParams)) {
-                    runIllegalRangedKeyQueryAsScan(hash, queryPack,
+                    runIllegalRangedKeyQueryAsScan(queryPack.getBaseEtagKey(), hash, queryPack,
                             GSI, projections, pageToken, unFilteredIndex, alternateIndex, startTime,
                             itemListFuture.completer());
                 } else {
-                    runStandardQuery(multiple, identifiers, hash, filteringExpression,
+                    runStandardQuery(queryPack.getBaseEtagKey(), multiple, identifiers, hash, filteringExpression,
                             GSI, projections, pageToken, unFilteredIndex, alternateIndex, startTime,
                             itemListFuture.completer());
                 }
@@ -631,21 +631,22 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         });
     }
 
-    private void runStandardQuery(Boolean multiple, JsonObject identifiers, String hash,
+    private void runStandardQuery(String baseEtagKey, Boolean multiple, JsonObject identifiers, String hash,
                                   DynamoDBQueryExpression<E> filteringExpression, String GSI, String[] projections,
                                   String pageToken, boolean unFilteredIndex, String alternateIndex,
                                   AtomicLong startTime, Handler<AsyncResult<ItemListResult<E>>> resultHandler)
             throws InstantiationException, IllegalAccessException {
         if (multiple != null && multiple) {
-            standardMultipleQuery(identifiers, hash, filteringExpression, pageToken, GSI, unFilteredIndex,
+            standardMultipleQuery(baseEtagKey, identifiers, hash, filteringExpression, pageToken, GSI, unFilteredIndex,
                     alternateIndex, projections, startTime, resultHandler);
         } else {
-            standardQuery(identifiers, hash, filteringExpression, pageToken, GSI, unFilteredIndex,
+            standardQuery(baseEtagKey, identifiers, hash, filteringExpression, pageToken, GSI, unFilteredIndex,
                     alternateIndex, projections, startTime, resultHandler);
         }
     }
 
-    private void standardMultipleQuery(JsonObject identifiers, String hash, DynamoDBQueryExpression<E> filteringExpression,
+    private void standardMultipleQuery(String baseEtagKey, JsonObject identifiers, String hash,
+                                       DynamoDBQueryExpression<E> filteringExpression,
                                        String pageToken, String GSI, boolean unFilteredIndex, String alternateIndex,
                                        String[] projections, AtomicLong startTime,
                                        Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
@@ -731,16 +732,17 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         int count = pageCount < desiredCount ? pageCount : desiredCount;
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
-        returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
+        returnTimedItemListResult(baseEtagKey, resultHandler, count, pagingToken, itemList, projections,
                 preOperationTime, operationTime, postOperationTime);
     }
 
-    private void returnTimedItemListResult(Handler<AsyncResult<ItemListResult<E>>> resultHandler, int count,
+    private void returnTimedItemListResult(String baseEtagKey, Handler<AsyncResult<ItemListResult<E>>> resultHandler, int count,
                                            String pagingToken, List<E> itemList, String[] projections,
                                            AtomicLong preOperationTime, AtomicLong operationTime,
                                            AtomicLong postOperationTime) {
         postOperationTime.set(System.nanoTime() - operationTime.get());
-        final ItemListResult<E> eItemListResult = new ItemListResult<>(count, itemList, pagingToken, projections, false);
+        final ItemListResult<E> eItemListResult =
+                new ItemListResult<>(baseEtagKey, count, itemList, pagingToken, projections, false);
         eItemListResult.setPreOperationProcessingTime(preOperationTime.get());
         eItemListResult.setOperationProcessingTime(operationTime.get());
         eItemListResult.setPostOperationProcessingTime(postOperationTime.get());
@@ -748,7 +750,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         resultHandler.handle(Future.succeededFuture(eItemListResult));
     }
 
-    private void standardQuery(JsonObject identifiers, String hash, DynamoDBQueryExpression<E> filteringExpression,
+    private void standardQuery(String baseEtagKey, JsonObject identifiers, String hash, DynamoDBQueryExpression<E> filteringExpression,
                                String pageToken, String GSI, boolean unFilteredIndex, String alternateIndex,
                                String[] projections, AtomicLong startTime, Handler<AsyncResult<ItemListResult<E>>> resultHandler)
             throws IllegalAccessException, InstantiationException {
@@ -841,11 +843,11 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
 
         }
 
-        returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
+        returnTimedItemListResult(baseEtagKey, resultHandler, count, pagingToken, itemList, projections,
                 preOperationTime, operationTime, postOperationTime);
     }
 
-    private void runIllegalRangedKeyQueryAsScan(String hash, QueryPack<E> queryPack,
+    private void runIllegalRangedKeyQueryAsScan(String baseEtagKey, String hash, QueryPack<E> queryPack,
                                                 String GSI, String[] projections, String pageToken,
                                                 boolean unFilteredIndex, String alternateIndex,
                                                 AtomicLong startTime, Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
@@ -935,24 +937,24 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         int count = pageCount < desiredCount ? pageCount : desiredCount;
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
-        returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
+        returnTimedItemListResult(baseEtagKey, resultHandler, count, pagingToken, itemList, projections,
                 preOperationTime, operationTime, postOperationTime);
     }
 
-    private void runRootQuery(Boolean multiple, JsonObject identifiers, String hash,
+    private void runRootQuery(String baseEtagKey, Boolean multiple, JsonObject identifiers, String hash,
                               QueryPack<E> queryPack, DynamoDBQueryExpression<E> filteringExpression,
                               String GSI, String[] projections, String pageToken, boolean unFilteredIndex,
                               String alternateIndex, AtomicLong startTime,
                               Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
         if (multiple != null && multiple) {
-            rootMultipleQuery(identifiers, hash, filteringExpression, GSI, pageToken, projections,
+            rootMultipleQuery(baseEtagKey, identifiers, hash, filteringExpression, GSI, pageToken, projections,
                     unFilteredIndex, alternateIndex, startTime, resultHandler);
         } else {
-            rootRootQuery(queryPack, GSI, pageToken, projections, unFilteredIndex, alternateIndex, startTime, resultHandler);
+            rootRootQuery(baseEtagKey, queryPack, GSI, pageToken, projections, unFilteredIndex, alternateIndex, startTime, resultHandler);
         }
     }
 
-    private void rootMultipleQuery(JsonObject identifiers, String hash, DynamoDBQueryExpression<E> filteringExpression,
+    private void rootMultipleQuery(String baseEtagKey, JsonObject identifiers, String hash, DynamoDBQueryExpression<E> filteringExpression,
                                    String GSI, String pageToken, String[] projections, boolean unFilteredIndex,
                                    String alternateIndex, AtomicLong startTime,
                                    Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
@@ -1026,11 +1028,11 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         int count = pageCount < desiredCount ? pageCount : desiredCount;
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
-        returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
+        returnTimedItemListResult(baseEtagKey, resultHandler, count, pagingToken, itemList, projections,
                 preOperationTime, operationTime, postOperationTime);
     }
 
-    private void rootRootQuery(QueryPack<E> queryPack, String GSI, String pageToken, String[] projections,
+    private void rootRootQuery(String baseEtagKey, QueryPack<E> queryPack, String GSI, String pageToken, String[] projections,
                                boolean unFilteredIndex, String alternateIndex, AtomicLong startTime,
                                Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
         AtomicLong preOperationTime = new AtomicLong();
@@ -1098,7 +1100,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         int count = pageCount < desiredCount ? pageCount : desiredCount;
         String pagingToken = setScanPageToken(pageCount, desiredCount, itemList, GSI, alternateIndex, unFilteredIndex);
 
-        returnTimedItemListResult(resultHandler, count, pagingToken, itemList, projections,
+        returnTimedItemListResult(baseEtagKey, resultHandler, count, pagingToken, itemList, projections,
                 preOperationTime, operationTime, postOperationTime);
     }
 

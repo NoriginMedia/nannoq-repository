@@ -148,9 +148,11 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
                             })
                             .collect(toList());
 
-                    final ItemList<E> eItemList =
-                            new ItemList<>(pageToken, items.size(), items, projections);
+                    final ItemList<E> eItemList = new ItemList<>();
+                    eItemList.setItems(items);
+                    eItemList.setCount(items.size());
                     eItemList.setEtag(jsonObject.getString("etag"));
+                    eItemList.setPageToken(pageToken);
 
                     resultHandler.handle(Future.succeededFuture(eItemList));
                 } catch (DecodeException e) {

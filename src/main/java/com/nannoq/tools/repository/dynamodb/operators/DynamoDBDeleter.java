@@ -136,7 +136,7 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
                             if (purgeRes.failed()) {
                                 future.fail(purgeRes.cause());
                             } else {
-                                if (eTagManager != null && items.size() > 0) {
+                                if (eTagManager != null) {
                                     Future<Boolean> removeETags = Future.future();
 
                                     final int hash = new JsonObject().put("hash", items.get(0).getHash())
