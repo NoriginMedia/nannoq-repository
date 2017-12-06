@@ -202,7 +202,6 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                                             BiFunction<List<E>, String, List<E>> valueExtractor, String[] projections,
                                             String GSI, Handler<AsyncResult<String>> resultHandler) {
         AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
-        String hash = identifiers.getString("hash");
         String field = aggregateFunction.getField();
         String newEtagKeyPostfix = "_" + field + "_" + command;
         String etagKey = queryPack.getBaseEtagKey() +
@@ -220,21 +219,21 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                         List<E> records = allResult.result();
 
                         if (records.size() == 0) {
-                            setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey,
+                            setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey,
                                     new JsonObject().put("error", "Empty table!").encode(), resultHandler);
                         } else {
                             if (queryPack.getAggregateFunction().hasGrouping()) {
                                 List<E> maxItems = getAllItemsWithHighestValue(allResult.result(), field);
                                 JsonObject aggregatedItems = calculateGroupings(aggregateFunction, maxItems);
 
-                                setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, aggregatedItems.encode(), resultHandler);
+                                setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey, aggregatedItems.encode(), resultHandler);
                             } else {
                                 JsonArray items = new JsonArray();
                                 valueExtractor.apply(records, field).stream()
                                         .map(o -> o.toJsonFormat())
                                         .forEach(items::add);
 
-                                setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, items.encode(), resultHandler);
+                                setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey, items.encode(), resultHandler);
                             }
                         }
                     }
@@ -318,7 +317,6 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
     private void avgField(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
                           Handler<AsyncResult<String>> resultHandler) {
         AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
-        String hash = identifiers.getString("hash");
         String field = aggregateFunction.getField();
         String newEtagKeyPostfix = "_" + field + "_AVG";
         String etagKey = queryPack.getBaseEtagKey() +
@@ -336,7 +334,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                         List<E> records = allResult.result();
 
                         if (records.size() == 0) {
-                            setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey,
+                            setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey,
                                     new JsonObject().put("error", "Empty table!").encode(), resultHandler);
                         } else {
                             JsonObject avg;
@@ -356,7 +354,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                                 }
                             }
 
-                            setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, avg.encode(), resultHandler);
+                            setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey, avg.encode(), resultHandler);
                         }
                     }
                 };
@@ -430,7 +428,6 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
     private void sumField(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
                           Handler<AsyncResult<String>> resultHandler) {
         AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
-        String hash = identifiers.getString("hash");
         String field = aggregateFunction.getField();
         String newEtagKeyPostfix = "_" + field + "_SUM";
         String etagKey = queryPack.getBaseEtagKey() +
@@ -450,7 +447,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                         List<E> records = allResult.result();
 
                         if (records.size() == 0) {
-                            setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey,
+                            setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey,
                                     new JsonObject().put("error", "Empty table!").encode(), resultHandler);
                         } else {
                             JsonObject sum = aggregateFunction.hasGrouping() ?
@@ -460,7 +457,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                                             .filter(Objects::nonNull)
                                             .sum());
 
-                            setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, sum.encode(), resultHandler);
+                            setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey, sum.encode(), resultHandler);
                         }
                     }
                 };
@@ -508,7 +505,6 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
 
     private void countItems(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
                             Handler<AsyncResult<String>> resultHandler) {
-        String hash = identifiers.getString("hash");
         String newEtagKeyPostfix = "_COUNT";
         String etagKey = queryPack.getBaseEtagKey() +
                 newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
@@ -527,7 +523,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
                                 countGrouping(allResult.result(), aggregateFunction) :
                                 new JsonObject().put("count", allResult.result().size());
 
-                        setEtagAndCacheAndReturnContent(etagKey, hash, cacheKey, count.encode(), resultHandler);
+                        setEtagAndCacheAndReturnContent(etagKey, identifiers.encode().hashCode(), cacheKey, count.encode(), resultHandler);
                     }
                 };
 
@@ -832,11 +828,9 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         }
     }
 
-    private void setEtagAndCacheAndReturnContent(String etagKey, String hash, String cacheKey, String content,
+    private void setEtagAndCacheAndReturnContent(String etagKey, int hash, String cacheKey, String content,
                                                  Handler<AsyncResult<String>> resultHandler) {
-        String etagItemListHashKey = TYPE.getSimpleName() + "_" +
-                (hash != null ? hash + "_" : "") +
-                "itemListEtags";
+        String etagItemListHashKey = TYPE.getSimpleName() + "_" + hash + "_" + "itemListEtags";
 
         String newEtag = ModelUtils.returnNewEtag(content.hashCode());
 

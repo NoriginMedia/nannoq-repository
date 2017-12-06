@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static java.util.stream.Collectors.toList;
 
@@ -105,13 +106,14 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
                 List<Future> deleteFutures = new ArrayList<>();
                 List<Future> etagFutures = new ArrayList<>();
 
-                items.forEach(record -> {
+                IntStream.range(0, items.size()).forEach(i -> {
+                    E record = items.get(i);
                     Future<E> deleteFuture = Future.future();
                     Future<Boolean> deleteEtagsFuture = Future.future();
 
                     try {
                         if (eTagManager != null) {
-                            eTagManager.removeProjectionsEtags(items.get(0).getHash(), deleteEtagsFuture.completer());
+                            eTagManager.removeProjectionsEtags(identifiers.get(i).hashCode(), deleteEtagsFuture.completer());
                         }
 
                         this.optimisticLockingDelete(record, null, deleteFuture);
@@ -134,10 +136,12 @@ public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cachea
                             if (purgeRes.failed()) {
                                 future.fail(purgeRes.cause());
                             } else {
-                                if (eTagManager != null) {
+                                if (eTagManager != null && items.size() > 0) {
                                     Future<Boolean> removeETags = Future.future();
 
-                                    eTagManager.destroyEtags(items.get(0).getHash(), removeETags.completer());
+                                    final int hash = new JsonObject().put("hash", items.get(0).getHash())
+                                            .encode().hashCode();
+                                    eTagManager.destroyEtags(hash, removeETags.completer());
 
                                     etagFutures.add(removeETags);
 

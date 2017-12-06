@@ -288,10 +288,14 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
     }
 
     private void destroyEtagsAfterCachePurge(Future<E> writeFuture, E record, Future<Boolean> purgeFuture, String hash) {
+        final JsonObject jsonObject = new JsonObject()
+                .put("hash", record.getHash())
+                .put("range", record.getRange());
+
         purgeFuture.setHandler(purgeRes -> {
             if (purgeRes.failed()) {
                 if (eTagManager != null) {
-                    eTagManager.destroyEtags(record.getHash(), res ->
+                    eTagManager.destroyEtags(new JsonObject().put("hash", record.getHash()).encode().hashCode(), res ->
                             writeFuture.complete(record));
                 } else {
                     writeFuture.complete(record);
@@ -301,8 +305,9 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                     Future<Boolean> removeProjections = Future.future();
                     Future<Boolean> removeETags = Future.future();
 
-                    eTagManager.removeProjectionsEtags(hash, removeProjections.completer());
-                    eTagManager.destroyEtags(record.getHash(), removeETags.completer());
+                    eTagManager.removeProjectionsEtags(jsonObject.encode().hashCode(), removeProjections.completer());
+                    eTagManager.destroyEtags(new JsonObject()
+                            .put("hash", record.getHash()).encode().hashCode(), removeETags.completer());
 
                     CompositeFuture.all(removeProjections, removeETags).setHandler(res -> {
                         if (res.failed()) {

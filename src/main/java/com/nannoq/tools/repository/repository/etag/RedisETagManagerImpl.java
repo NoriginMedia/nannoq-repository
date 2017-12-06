@@ -53,7 +53,7 @@ import static com.nannoq.tools.repository.repository.redis.RedisUtils.performJed
  * @version 17.11.2017
  */
 public class RedisETagManagerImpl<E extends ETagable & Model> implements ETagManager<E> {
-    private static final Logger logger = LoggerFactory.getLogger(ClusterCacheManagerImpl.class.getSimpleName());
+    private static final Logger logger = LoggerFactory.getLogger(RedisETagManagerImpl.class.getSimpleName());
 
     private final Class<E> TYPE;
 
@@ -64,16 +64,14 @@ public class RedisETagManagerImpl<E extends ETagable & Model> implements ETagMan
         this.REDIS_CLIENT = redisClient;
     }
 
-    public void removeProjectionsEtags(String hash, Handler<AsyncResult<Boolean>> resultHandler) {
+    public void removeProjectionsEtags(int hash, Handler<AsyncResult<Boolean>> resultHandler) {
         String etagKeyBase = TYPE.getSimpleName() + "_" + hash + "/projections";
 
         doEtagRemovalWithRetry(etagKeyBase, resultHandler);
     }
 
-    public void destroyEtags(String hash, Handler<AsyncResult<Boolean>> resultHandler) {
-        String etagItemListHashKey = TYPE.getSimpleName() + "_" +
-                (hash != null ? hash + "_" : "") +
-                "itemListEtags";
+    public void destroyEtags(int hash, Handler<AsyncResult<Boolean>> resultHandler) {
+        String etagItemListHashKey = TYPE.getSimpleName() + "_" + hash + "_" + "itemListEtags";
 
         doEtagRemovalWithRetry(etagItemListHashKey, resultHandler);
     }
@@ -119,7 +117,7 @@ public class RedisETagManagerImpl<E extends ETagable & Model> implements ETagMan
     }
 
     @Override
-    public void setProjectionEtags(String[] projections, String hash, E item) {
+    public void setProjectionEtags(String[] projections, int hash, E item) {
         if (projections != null && projections.length > 0 && item != null) {
             String etagKeyBase = TYPE.getSimpleName() + "_" + hash + "/projections";
             String key = TYPE.getSimpleName() + "_" + hash + "/projections" + Arrays.hashCode(projections);
@@ -134,11 +132,8 @@ public class RedisETagManagerImpl<E extends ETagable & Model> implements ETagMan
     }
 
     @Override
-    public void setItemListEtags(String hash, String etagKey, ItemList<E> itemList, Future<Boolean> itemListEtagFuture)  {
-        String etagItemListHashKey = TYPE.getSimpleName() + "_" +
-                (hash != null ? hash + "_" : "") +
-                "itemListEtags";
-
+    public void setItemListEtags(String etagItemListHashKey, String etagKey, ItemList<E> itemList,
+                                 Future<Boolean> itemListEtagFuture)  {
         RedisUtils.performJedisWithRetry(REDIS_CLIENT, in ->
                 in.hset(etagItemListHashKey, etagKey, itemList.getEtag(), setRes -> {
                     itemListEtagFuture.complete(Boolean.TRUE);

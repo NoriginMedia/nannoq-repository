@@ -145,19 +145,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                     }
                 }, false, readResult -> {
                     if (readResult.failed()) {
-                        if (readResult.cause().getClass() == NoSuchElementException.class) {
-                            logger.debug("Not found!");
-
-                            postOperationTime.set(System.nanoTime() - startTime.get());
-                            resultHandler.handle(ServiceException.fail(404, "Not found!",
-                                    new JsonObject(Json.encode(readResult.cause()))));
-                        } else {
-                            logger.error("Error in read!", readResult.cause());
-
-                            postOperationTime.set(System.nanoTime() - startTime.get());
-                            resultHandler.handle(ServiceException.fail(500, "Error in read!",
-                                    new JsonObject(Json.encode(readResult.cause()))));
-                        }
+                        doReadResult(postOperationTime, startTime, readResult, resultHandler);
                     } else {
                         postOperationTime.set(System.nanoTime() - startTime.get());
 
@@ -202,7 +190,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                     }
 
                     if (etagManager != null) {
-                        etagManager.setProjectionEtags(projections, hash, item);
+                        etagManager.setProjectionEtags(projections, identifiers.encode().hashCode(), item);
                     }
 
                     if (item != null && cacheManager.isObjectCacheAvailable()) {
@@ -216,10 +204,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                     }
                 }, false, readResult -> {
                     if (readResult.failed()) {
-                        logger.error("Error in Read!", readResult.cause());
-
-                        resultHandler.handle(ServiceException.fail(500, "Error in remoteRead!",
-                                new JsonObject(Json.encode(readResult.cause()))));
+                        doReadResult(postOperationTime, startTime, readResult, resultHandler);
                     } else {
                         postOperationTime.set(System.nanoTime() - operationTime.get());
 
@@ -228,6 +213,21 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 });
             }
         });
+    }
+
+    private void doReadResult(AtomicLong postOperationTime, AtomicLong startTime, AsyncResult<E> readResult,
+                              Handler<AsyncResult<ItemResult<E>>> resultHandler) {
+        if (readResult.cause().getClass() == NoSuchElementException.class) {
+            postOperationTime.set(System.nanoTime() - startTime.get());
+            resultHandler.handle(ServiceException.fail(404, "Not found!",
+                    new JsonObject(Json.encode(readResult.cause()))));
+        } else {
+            logger.error("Error in read!", readResult.cause());
+
+            postOperationTime.set(System.nanoTime() - startTime.get());
+            resultHandler.handle(ServiceException.fail(500, "Error in read!",
+                    new JsonObject(Json.encode(readResult.cause()))));
+        }
     }
 
     private E fetchItem(AtomicLong startTime, AtomicLong preOperationTime, AtomicLong operationTime,
@@ -239,7 +239,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                         logger.debug("Loading ranged item without range key!");
                     }
 
-                    return null;
+                    return fetchHashItem(hash, startTime, preOperationTime, operationTime, consistent);
                 } else {
                     return fetchHashAndRangeItem(hash, range, startTime, preOperationTime, operationTime);
                 }
@@ -587,8 +587,11 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                                     logger.debug("Setting: " + etagKey + " with: " + itemList.getEtag());
                                 }
 
+                                String etagItemListHashKey = TYPE.getSimpleName() + "_" +
+                                        identifiers.encode().hashCode() + "_" + "itemListEtags";
+
                                 if (etagManager != null) {
-                                    etagManager.setItemListEtags(hash, etagKey, itemList, itemListCacheFuture);
+                                    etagManager.setItemListEtags(etagItemListHashKey, etagKey, itemList, itemListCacheFuture);
                                 } else {
                                     itemListCacheFuture.complete();
                                 }

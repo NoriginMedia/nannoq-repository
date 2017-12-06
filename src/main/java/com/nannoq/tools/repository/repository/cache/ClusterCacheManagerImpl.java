@@ -232,7 +232,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             });
 
             itemListCache.getAsync(cacheId).andThen(new ExecutionCallback<String>() {
-                @SuppressWarnings("unchecked")
+                @SuppressWarnings({"unchecked", "Duplicates"})
                 @Override
                 public void onResponse(String s) {
                     if (!completeOrTimeout.getAndSet(true)) {
@@ -303,6 +303,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
             aggregationCache.getAsync(cacheKey, expiryPolicy).andThen(new ExecutionCallback<String>() {
 
+                @SuppressWarnings("Duplicates")
                 public void onResponse(String s) {
                     if (!completeOrTimeout.getAndSet(true)) {
                         if (s == null) {
@@ -486,7 +487,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
     private void replaceTimeoutHandler(String cacheId, Future<Boolean> replaceFirst) {
         vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-            if (!replaceFirst.isComplete()) {
+            if (!replaceFirst.isComplete() && !objectCache.isDestroyed()) {
                 objectCache.removeAsync(cacheId);
 
                 replaceFirst.tryComplete(Boolean.TRUE);
@@ -740,7 +741,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
         if (isItemListCacheAvailable()) {
             vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                if (!itemListFuture.isComplete()) {
+                if (!itemListFuture.isComplete() && !itemListCache.isDestroyed()) {
                     itemListCache.clear();
 
                     itemListFuture.tryComplete();
@@ -766,7 +767,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
         if (isAggregationCacheAvailable()) {
             vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                if (!aggregationFuture.isComplete()) {
+                if (!aggregationFuture.isComplete() && !aggregationCache.isDestroyed()) {
                     aggregationCache.clear();
 
                     aggregationFuture.tryComplete();

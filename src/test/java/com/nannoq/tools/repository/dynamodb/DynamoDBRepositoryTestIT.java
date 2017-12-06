@@ -475,7 +475,13 @@ public class DynamoDBRepositoryTestIT {
             });
         });
 
-        CompositeFuture.all(futureList).setHandler(res -> async.complete());
+        CompositeFuture.all(futureList).setHandler(res -> {
+            if (res.failed()) {
+                testContext.fail(res.cause());
+            } else {
+                async.complete();
+            }
+        });
     }
 
     @Test
@@ -512,7 +518,13 @@ public class DynamoDBRepositoryTestIT {
             });
         });
 
-        CompositeFuture.all(futureList).setHandler(res -> async.complete());
+        CompositeFuture.all(futureList).setHandler(res -> {
+            if (res.failed()) {
+                testContext.fail(res.cause());
+            } else {
+                async.complete();
+            }
+        });
     }
 
     @Test
@@ -579,7 +591,13 @@ public class DynamoDBRepositoryTestIT {
             });
         });
 
-        CompositeFuture.all(futureList).setHandler(res -> async.complete());
+        CompositeFuture.all(futureList).setHandler(res -> {
+            if (res.failed()) {
+                testContext.fail(res.cause());
+            } else {
+                async.complete();
+            }
+        });
     }
 
     @Test
@@ -918,7 +936,13 @@ public class DynamoDBRepositoryTestIT {
             });
         });
 
-        CompositeFuture.all(futureList).setHandler(res -> async.complete());
+        CompositeFuture.all(futureList).setHandler(res -> {
+            if (res.failed()) {
+                testContext.fail(res.cause());
+            } else {
+                async.complete();
+            }
+        });
     }
 
     @Test
