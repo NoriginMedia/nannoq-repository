@@ -68,8 +68,9 @@ public interface CachedContent {
         HttpClientOptions opts = new HttpClientOptions()
                 .setConnectTimeout(10000)
                 .setMaxRedirects(100);
+        final HttpClient httpClient = vertx.createHttpClient(opts);
 
-        doRequest(vertx, vertx.createHttpClient(opts), attempt, urlToContent, bucketPath, result -> {
+        doRequest(vertx, httpClient, attempt, urlToContent, bucketPath, result -> {
             if (result.failed()) {
                 if (System.currentTimeMillis() < startTime + (60000L * 15L)) {
                     if (attempt < 30) {
@@ -80,11 +81,13 @@ public interface CachedContent {
                     } else {
                         logger.error("Complete failure on: " + urlToContent + " after " + attempt + " attempts!");
 
+                        httpClient.close();
                         resultHandler.handle(result);
                     }
                 } else {
                     logger.error("Timeout failure (15 mins) on: " + urlToContent + " after " + attempt + " attempts!");
 
+                    httpClient.close();
                     resultHandler.handle(result);
                 }
             } else {
@@ -94,6 +97,7 @@ public interface CachedContent {
                     logger.warn("Back to normal on: " + urlToContent + " at attempt " + attempt);
                 }
 
+                httpClient.close();
                 resultHandler.handle(result);
             }
         });
