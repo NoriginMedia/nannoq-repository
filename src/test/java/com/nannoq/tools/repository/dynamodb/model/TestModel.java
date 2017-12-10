@@ -60,6 +60,14 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
         return JsonObject.mapFrom(this);
     }
 
+    @Override
+    public TestModel setIdentifiers(JsonObject identifiers) {
+        setHash(identifiers.getString("hash"));
+        setRange(identifiers.getString("range"));
+
+        return this;
+    }
+
     @DynamoDBHashKey
     public String getSomeStringOne() {
         return someStringOne;
@@ -232,7 +240,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
 
     @Override
     @Fluent
-    public DynamoDBModel setHash(String hash) {
+    public TestModel setHash(String hash) {
         someStringOne = hash;
 
         return this;
@@ -240,7 +248,7 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
 
     @Override
     @Fluent
-    public DynamoDBModel setRange(String range) {
+    public TestModel setRange(String range) {
         someStringTwo = range;
 
         return this;
@@ -267,12 +275,12 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     @Override
-    public Model setModifiables(Model newObject) {
+    public TestModel setModifiables(Model newObject) {
         return this;
     }
 
     @Override
-    public Model sanitize() {
+    public TestModel sanitize() {
         return this;
     }
 
@@ -292,7 +300,8 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     @Override
-    public Model setCreatedAt(Date date) {
+    @Fluent
+    public TestModel setCreatedAt(Date date) {
         createdAt = date;
 
         return this;
@@ -304,14 +313,16 @@ public class TestModel implements DynamoDBModel, Model, ETagable, Cacheable {
     }
 
     @Override
-    public Model setUpdatedAt(Date date) {
+    @Fluent
+    public TestModel setUpdatedAt(Date date) {
         updatedAt = date;
 
         return this;
     }
 
     @Override
-    public Model setInitialValues(Model record) {
+    @Fluent
+    public TestModel setInitialValues(Model record) {
         return this;
     }
 

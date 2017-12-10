@@ -82,7 +82,7 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
     public JsonObject buildParameters(Map<String, List<String>> queryMap,
                                       Field[] fields, Method[] methods,
                                       JsonObject errors,
-                                      Map<String, List<FilterParameter<E>>> params, int[] limit,
+                                      Map<String, List<FilterParameter>> params, int[] limit,
                                       Queue<OrderByParameter> orderByQueue, String[] indexName) {
         queryMap.keySet().forEach(key -> {
             if (key.equalsIgnoreCase(LIMIT_KEY) || key.equalsIgnoreCase(MULTIPLE_IDS_KEY) ||
@@ -184,7 +184,7 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
 
     @SuppressWarnings("Duplicates")
     DynamoDBQueryExpression<E> applyParameters(OrderByParameter peek,
-                                               Map<String, List<FilterParameter<E>>> params) {
+                                               Map<String, List<FilterParameter>> params) {
         final DynamoDBQueryExpression<E> filterExpression = new DynamoDBQueryExpression<>();
 
         if (params != null) {
@@ -444,18 +444,18 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
                 .collect(toList()));
     }
 
-    private boolean isRangeKey(OrderByParameter peek, FilterParameter<E> param) {
+    private boolean isRangeKey(OrderByParameter peek, FilterParameter param) {
         return isRangeKey(peek, param.getField().charAt(param.getField().length() - 2) == '_' ?
                 param.getField().substring(0, param.getField().length() - 2) : param.getField(), param);
     }
 
-    private boolean isRangeKey(OrderByParameter peek, String fieldName, FilterParameter<E> param) {
+    private boolean isRangeKey(OrderByParameter peek, String fieldName, FilterParameter param) {
         return (peek != null && peek.getField().equalsIgnoreCase(fieldName)) ||
                 (peek == null && param.getField().equalsIgnoreCase(PAGINATION_IDENTIFIER));
     }
 
     @SuppressWarnings("Duplicates")
-    DynamoDBScanExpression applyParameters(Map<String, List<FilterParameter<E>>> params) {
+    DynamoDBScanExpression applyParameters(Map<String, List<FilterParameter>> params) {
         final DynamoDBScanExpression filterExpression = new DynamoDBScanExpression();
 
         if (params != null) {
@@ -634,12 +634,12 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     private void buildMultipleRangeKeyCondition(DynamoDBQueryExpression<E> filterExpression, int count,
-                                                List<FilterParameter<E>> paramList,
+                                                List<FilterParameter> paramList,
                                                 String rangeKeyName) {
         if (paramList.size() > 2) throw new IllegalArgumentException("Cannot query on more than two params on a range key!");
 
-        FilterParameter<E> paramOne = paramList.get(0);
-        FilterParameter<E> paramTwo = paramList.get(1);
+        FilterParameter paramOne = paramList.get(0);
+        FilterParameter paramTwo = paramList.get(1);
         Condition condition = new Condition();
 
         if (paramOne.isGt() && paramTwo.isLt()) {
@@ -716,7 +716,7 @@ public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cac
         return filterExpression;
     }
 
-    boolean isIllegalRangedKeyQueryParams(List<FilterParameter<E>> nameParams) {
+    boolean isIllegalRangedKeyQueryParams(List<FilterParameter> nameParams) {
         return nameParams.stream()
                 .anyMatch(FilterParameter::isIllegalRangedKeyParam);
     }

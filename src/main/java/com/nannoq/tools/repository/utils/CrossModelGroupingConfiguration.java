@@ -199,7 +199,7 @@ public class CrossModelGroupingConfiguration {
     public int hashCode() {
         int result = groupBy.hashCode();
         result = 31 * result + (groupByUnit != null ? groupByUnit.hashCode() : 0);
-        result = 31 * result + (groupByRange != null ? groupByRange.hashCode() : 0);
+        result = 31 * result + (groupByRange != null ? groupByRange.toString().hashCode() : 0);
         result = 31 * result + (groupingSortOrder != null ? groupingSortOrder.hashCode() : 0);
         result = 31 * result + groupingListLimit;
 

@@ -371,11 +371,11 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
-    void readAll(JsonObject identifiers, Map<String, List<FilterParameter<E>>> filterParameterMap,
+    void readAll(JsonObject identifiers, Map<String, List<FilterParameter>> filterParameterMap,
                  Handler<AsyncResult<List<E>>> resultHandler);
 
     default Future<List<E>> readAll(JsonObject identifiers,
-                                    Map<String, List<FilterParameter<E>>> filterParamterMap) {
+                                    Map<String, List<FilterParameter>> filterParamterMap) {
         Future<List<E>> readFuture = Future.future();
 
         readAll(identifiers, filterParamterMap, readAllResult -> {
@@ -389,11 +389,11 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
-    void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections,
+    void readAll(JsonObject identifiers, String pageToken, QueryPack queryPack, String[] projections,
                  Handler<AsyncResult<ItemListResult<E>>> resultHandler);
 
-    default Future<ItemListResult<E>> readAll(JsonObject identifiers, String pageToken,
-                                        QueryPack<E> queryPack, String[] projections) {
+    default Future<ItemListResult<E>> readAll(JsonObject identifiers, String pageToken, 
+                                              QueryPack queryPack, String[] projections) {
         Future<ItemListResult<E>> readFuture = Future.future();
 
         readAll(identifiers, pageToken, queryPack, projections, readAllResult -> {
@@ -407,11 +407,11 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
-    void readAll(String pageToken, QueryPack<E> queryPack, String[] projections,
+    void readAll(String pageToken, QueryPack queryPack, String[] projections,
                  Handler<AsyncResult<ItemListResult<E>>> resultHandler);
 
     default Future<ItemListResult<E>> readAll(String pageToken,
-                                              QueryPack<E> queryPack, String[] projections) {
+                                              QueryPack queryPack, String[] projections) {
         Future<ItemListResult<E>> readFuture = Future.future();
 
         readAll(pageToken, queryPack, projections, readAllResult -> {
@@ -425,10 +425,10 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
-    void aggregation(JsonObject identifiers, QueryPack<E> queryPack, String[] projections,
+    void aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections,
                      Handler<AsyncResult<String>> resultHandler);
 
-    default Future<String> aggregation(JsonObject identifiers, QueryPack<E> queryPack, String[] projections) {
+    default Future<String> aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections) {
         Future<String> readFuture = Future.future();
 
         aggregation(identifiers, queryPack, projections, readAllResult -> {
@@ -445,21 +445,20 @@ public interface Repository<E extends Model> {
     JsonObject buildParameters(Map<String, List<String>> queryMap,
                                Field[] fields, Method[] methods,
                                JsonObject errors,
-                               Map<String, List<FilterParameter<E>>> params, int[] limit,
+                               Map<String, List<FilterParameter>> params, int[] limit,
                                Queue<OrderByParameter> orderByQueue,
                                String[] indexName);
 
     @SuppressWarnings("unchecked")
     default void parseParam(Class<E> type, String paramJsonString, String key,
-                            Map<String, List<FilterParameter<E>>> params, JsonObject errors) {
-        FilterParameter<E> filterParameters = Json.decodeValue(paramJsonString, FilterParameter.class);
+                            Map<String, List<FilterParameter>> params, JsonObject errors) {
+        FilterParameter filterParameters = Json.decodeValue(paramJsonString, FilterParameter.class);
 
         if (filterParameters != null) {
             filterParameters.setField(key);
-            filterParameters.setClassType(type);
 
             if (filterParameters.isValid()) {
-                List<FilterParameter<E>> filterParameterList = params.get(key);
+                List<FilterParameter> filterParameterList = params.get(key);
                 if (filterParameterList == null) filterParameterList = new ArrayList<>();
                 filterParameterList.add(filterParameters);
                 params.put(key, filterParameterList);
@@ -487,9 +486,9 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
-    void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, Handler<AsyncResult<List<E>>> resultHandler);
+    void readAllWithoutPagination(String identifier, QueryPack queryPack, Handler<AsyncResult<List<E>>> resultHandler);
 
-    default Future<List<E>> readAllWithoutPagination(String identifier, QueryPack<E> queryPack) {
+    default Future<List<E>> readAllWithoutPagination(String identifier, QueryPack queryPack) {
         Future<List<E>> readFuture = Future.future();
 
         readAllWithoutPagination(identifier, queryPack, readAllResult -> {
@@ -503,9 +502,9 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
-    void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<List<E>>> resultHandler);
+    void readAllWithoutPagination(String identifier, QueryPack queryPack, String[] projections, Handler<AsyncResult<List<E>>> resultHandler);
 
-    default Future<List<E>> readAllWithoutPagination(String identifier, QueryPack<E> queryPack, String[] projections) {
+    default Future<List<E>> readAllWithoutPagination(String identifier, QueryPack queryPack, String[] projections) {
         Future<List<E>> readFuture = Future.future();
 
         readAllWithoutPagination(identifier, queryPack, projections, readAllResult -> {
@@ -519,17 +518,17 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
-    default void readAllWithoutPagination(QueryPack<E> queryPack, Handler<AsyncResult<List<E>>> resultHandler) {
+    default void readAllWithoutPagination(QueryPack queryPack, Handler<AsyncResult<List<E>>> resultHandler) {
         readAllWithoutPagination(queryPack, null, resultHandler);
     }
 
-    default Future<List<E>> readAllWithoutPagination(QueryPack<E> queryPack) {
+    default Future<List<E>> readAllWithoutPagination(QueryPack queryPack) {
         return readAllWithoutPagination(queryPack, (String[]) null);
     }
 
-    void readAllWithoutPagination(QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<List<E>>> resultHandler);
+    void readAllWithoutPagination(QueryPack queryPack, String[] projections, Handler<AsyncResult<List<E>>> resultHandler);
 
-    default Future<List<E>> readAllWithoutPagination(QueryPack<E> queryPack, String[] projections) {
+    default Future<List<E>> readAllWithoutPagination(QueryPack queryPack, String[] projections) {
         Future<List<E>> readFuture = Future.future();
 
         readAllWithoutPagination(queryPack, projections, readAllResult -> {

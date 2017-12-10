@@ -80,7 +80,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         this.eTagManager = eTagManager;
     }
     
-    public void aggregation(JsonObject identifiers, QueryPack<E> queryPack, String[] projections,
+    public void aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections,
                             String GSI, Handler<AsyncResult<String>> resultHandler) {
         if (logger.isDebugEnabled()) { logger.debug("QueryPack is: " + Json.encodePrettily(queryPack) + ", projections: " +
                 Arrays.toString(projections) + ", ids: " + identifiers.encodePrettily()); }
@@ -109,20 +109,20 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         }
     }
 
-    private void findItemsWithMinOfField(JsonObject identifiers, QueryPack<E> queryPack,
+    private void findItemsWithMinOfField(JsonObject identifiers, QueryPack queryPack,
                                          String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {
         performMinOrMaxAggregation(identifiers, queryPack, "MIN",
                 (r, f) -> getAllItemsWithLowestValue(r, f), projections, GSI, resultHandler);
     }
 
     @SuppressWarnings("unchecked")
-    private void findItemsWithMaxOfField(JsonObject identifiers, QueryPack<E> queryPack,
+    private void findItemsWithMaxOfField(JsonObject identifiers, QueryPack queryPack,
                                          String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {
         performMinOrMaxAggregation(identifiers, queryPack, "MAX",
                 (r, f) -> getAllItemsWithHighestValue(r, f), projections, GSI, resultHandler);
     }
 
-    private void doIdentifierBasedQuery(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+    private void doIdentifierBasedQuery(JsonObject identifiers, QueryPack queryPack, String GSI,
                                         Handler<AsyncResult<List<E>>> res, String[][] projs) {
         if (identifiers.isEmpty()) {
             if (GSI != null) {
@@ -198,16 +198,16 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         return result;
     }
 
-    private void performMinOrMaxAggregation(JsonObject identifiers, QueryPack<E> queryPack, String command,
+    private void performMinOrMaxAggregation(JsonObject identifiers, QueryPack queryPack, String command,
                                             BiFunction<List<E>, String, List<E>> valueExtractor, String[] projections,
                                             String GSI, Handler<AsyncResult<String>> resultHandler) {
+        int hashCode = queryPack.getAggregateFunction().getGroupBy() == null ?
+                0 : queryPack.getAggregateFunction().getGroupBy().hashCode();
         AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
         String field = aggregateFunction.getField();
         String newEtagKeyPostfix = "_" + field + "_" + command;
-        String etagKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
-        String cacheKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
+        String etagKey = queryPack.getBaseEtagKey() + newEtagKeyPostfix + hashCode;
+        String cacheKey = queryPack.getBaseEtagKey() + newEtagKeyPostfix + hashCode;
         final List<GroupingConfiguration> groupingParam = queryPack.getAggregateFunction().getGroupBy();
 
         cacheManager.checkAggregationCache(cacheKey, cacheRes -> {
@@ -314,15 +314,15 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         return result;
     }
 
-    private void avgField(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+    private void avgField(JsonObject identifiers, QueryPack queryPack, String GSI,
                           Handler<AsyncResult<String>> resultHandler) {
+        int hashCode = queryPack.getAggregateFunction().getGroupBy() == null ?
+                0 : queryPack.getAggregateFunction().getGroupBy().hashCode();
         AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
         String field = aggregateFunction.getField();
         String newEtagKeyPostfix = "_" + field + "_AVG";
-        String etagKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
-        String cacheKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
+        String etagKey = queryPack.getBaseEtagKey() + newEtagKeyPostfix + hashCode;
+        String cacheKey = queryPack.getBaseEtagKey() + newEtagKeyPostfix + hashCode;
         final List<GroupingConfiguration> groupingParam = queryPack.getAggregateFunction().getGroupBy();
 
         cacheManager.checkAggregationCache(cacheKey, cacheRes -> {
@@ -400,7 +400,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         });
     }
 
-    private void doIdentifierBasedQueryNoIdentifierAddition(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+    private void doIdentifierBasedQueryNoIdentifierAddition(JsonObject identifiers, QueryPack queryPack, String GSI,
                                                             Handler<AsyncResult<List<E>>> res, String[] projections) {
         String[][] temp = new String[1][1];
         temp[0] = projections;
@@ -408,7 +408,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         doIdentifierBasedQueryNoIdentifierAddition(identifiers, queryPack, GSI, res, temp);
     }
 
-    private void doIdentifierBasedQueryNoIdentifierAddition(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+    private void doIdentifierBasedQueryNoIdentifierAddition(JsonObject identifiers, QueryPack queryPack, String GSI,
                                                             Handler<AsyncResult<List<E>>> res, String[][] projections) {
         if (identifiers.isEmpty()) {
             if (GSI != null) {
@@ -425,15 +425,15 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         }
     }
 
-    private void sumField(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+    private void sumField(JsonObject identifiers, QueryPack queryPack, String GSI,
                           Handler<AsyncResult<String>> resultHandler) {
+        int hashCode = queryPack.getAggregateFunction().getGroupBy() == null ?
+                0 : queryPack.getAggregateFunction().getGroupBy().hashCode();
         AggregateFunction aggregateFunction = queryPack.getAggregateFunction();
         String field = aggregateFunction.getField();
         String newEtagKeyPostfix = "_" + field + "_SUM";
-        String etagKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
-        String cacheKey = queryPack.getBaseEtagKey() +
-                newEtagKeyPostfix + queryPack.getAggregateFunction().getGroupBy().hashCode();
+        String etagKey = queryPack.getBaseEtagKey() + newEtagKeyPostfix + hashCode;
+        String cacheKey = queryPack.getBaseEtagKey() + newEtagKeyPostfix + hashCode;
         final List<GroupingConfiguration> groupingParam = queryPack.getAggregateFunction().getGroupBy();
 
         cacheManager.checkAggregationCache(cacheKey, cacheRes -> {
@@ -503,7 +503,7 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
         });
     }
 
-    private void countItems(JsonObject identifiers, QueryPack<E> queryPack, String GSI,
+    private void countItems(JsonObject identifiers, QueryPack queryPack, String GSI,
                             Handler<AsyncResult<String>> resultHandler) {
         String newEtagKeyPostfix = "_COUNT";
         String etagKey = queryPack.getBaseEtagKey() +
@@ -767,8 +767,14 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     private <T> String calculateGroupingKey(T item, GroupingConfiguration groupingConfiguration) {
-        String groupingKey = db.getFieldAsString(groupingConfiguration.getGroupBy(), item);
-        if (groupingKey == null) throw new UnknownError("Cannot find field!");
+        String groupingKey;
+
+        try {
+            groupingKey = db.getFieldAsString(groupingConfiguration.getGroupBy(), item);
+            if (groupingKey == null) throw new UnknownError("Cannot find field!");
+        } catch (NullPointerException e) {
+            throw new UnknownError("Field is null!");
+        }
 
         if (groupingConfiguration.hasGroupRanging()) {
             String groupByRangeUnit = groupingConfiguration.getGroupByUnit();
@@ -831,7 +837,6 @@ public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cac
     private void setEtagAndCacheAndReturnContent(String etagKey, int hash, String cacheKey, String content,
                                                  Handler<AsyncResult<String>> resultHandler) {
         String etagItemListHashKey = TYPE.getSimpleName() + "_" + hash + "_" + "itemListEtags";
-
         String newEtag = ModelUtils.returnNewEtag(content.hashCode());
 
         cacheManager.replaceAggregationCache(content, () -> cacheKey, cacheRes -> {

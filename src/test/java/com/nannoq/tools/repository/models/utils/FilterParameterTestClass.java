@@ -37,6 +37,11 @@ public class FilterParameterTestClass implements Model {
     private Long viewCount;
 
     @Override
+    public Model setIdentifiers(JsonObject identifiers) {
+        return null;
+    }
+
+    @Override
     public Model setModifiables(Model newObject) {
         return null;
     }

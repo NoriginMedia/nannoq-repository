@@ -34,13 +34,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class FilterParameterTest {
-    private FilterParameter<FilterParameterTestClass> validParameter;
+    private FilterParameter validParameter;
 
     @Before
     public void setUp() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withEq(1000)
                 .build();
     }
@@ -66,9 +64,7 @@ public class FilterParameterTest {
 
     @Test
     public void isNe() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withNe(1000)
                 .build();
         assertTrue(validParameter.isNe());
@@ -90,9 +86,7 @@ public class FilterParameterTest {
 
     @Test
     public void isIn() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withIn(new Object[] {1000})
                 .build();
         assertTrue(validParameter.isIn());
@@ -114,9 +108,7 @@ public class FilterParameterTest {
 
     @Test
     public void isGt() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-            .withKlazz(FilterParameterTestClass.class)
-            .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
             .withGt(1000)
             .build();
         assertTrue(validParameter.isGt());
@@ -138,9 +130,7 @@ public class FilterParameterTest {
 
     @Test
     public void isLt() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withLt(1000)
                 .build();
         assertTrue(validParameter.isLt());
@@ -162,9 +152,7 @@ public class FilterParameterTest {
 
     @Test
     public void isGe() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withGe(1000)
                 .build();
         assertTrue(validParameter.isGe());
@@ -186,9 +174,7 @@ public class FilterParameterTest {
 
     @Test
     public void isLe() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withLe(1000)
                 .build();
         assertTrue(validParameter.isLe());
@@ -210,9 +196,7 @@ public class FilterParameterTest {
 
     @Test
     public void isBetween() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withBetween(1000, 2000)
                 .build();
         assertTrue(validParameter.isBetween());
@@ -234,9 +218,7 @@ public class FilterParameterTest {
 
     @Test
     public void isInclusiveBetween() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withInclusiveBetween(1000, 2000)
                 .build();
         assertTrue(validParameter.isInclusiveBetween());
@@ -258,9 +240,7 @@ public class FilterParameterTest {
 
     @Test
     public void isGeLtVariableBetween() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withGeLtVariableBetween(1000, 2000)
                 .build();
         assertTrue(validParameter.isGeLtVariableBetween());
@@ -282,9 +262,7 @@ public class FilterParameterTest {
 
     @Test
     public void isLeGtVariableBetween() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withLeGtVariableBetween(1000, 2000)
                 .build();
         assertTrue(validParameter.isLeGtVariableBetween());
@@ -306,9 +284,7 @@ public class FilterParameterTest {
 
     @Test
     public void isContains() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withContains(1000)
                 .build();
         assertTrue(validParameter.isContains());
@@ -330,9 +306,7 @@ public class FilterParameterTest {
 
     @Test
     public void isNotContains() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withNotContains(1000)
                 .build();
         assertTrue(validParameter.isNotContains());
@@ -354,9 +328,7 @@ public class FilterParameterTest {
 
     @Test
     public void isBeginsWith() throws Exception {
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withBeginsWith(1000)
                 .build();
         assertTrue(validParameter.isBeginsWith());
@@ -380,9 +352,7 @@ public class FilterParameterTest {
     public void isValid() throws Exception {
         assertTrue(validParameter.isValid());
 
-        validParameter = FilterParameter.<FilterParameterTestClass>builder()
-                .withKlazz(FilterParameterTestClass.class)
-                .withField("viewCount")
+        validParameter = FilterParameter.<FilterParameterTestClass>builder("viewCount")
                 .withEq(1000)
                 .withGt("lol")
                 .build();

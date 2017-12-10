@@ -40,7 +40,10 @@ public class AggregateFunctionTest {
 
     @Before
     public void setUp() throws Exception {
-        validAggregateFunction = new AggregateFunction(COUNT, "viewCount");
+        validAggregateFunction = AggregateFunction.builder()
+                .withAggregateFunction(COUNT)
+                .withField("viewCount")
+                .build();
     }
 
     @Test
@@ -56,28 +59,40 @@ public class AggregateFunctionTest {
     public void isMin() throws Exception {
         assertFalse(validAggregateFunction.isMin());
         assertTrue(validAggregateFunction.isCount());
-        assertTrue(new AggregateFunction(MIN, "viewCount").isMin());
+        assertTrue(AggregateFunction.builder()
+                .withAggregateFunction(MIN)
+                .withField("viewCount")
+                .build().isMin());
     }
 
     @Test
     public void isMax() throws Exception {
         assertFalse(validAggregateFunction.isMax());
         assertTrue(validAggregateFunction.isCount());
-        assertTrue(new AggregateFunction(MAX, "viewCount").isMax());
+        assertTrue(AggregateFunction.builder()
+                .withAggregateFunction(MAX)
+                .withField("viewCount")
+                .build().isMax());
     }
 
     @Test
     public void isAverage() throws Exception {
         assertFalse(validAggregateFunction.isAverage());
         assertTrue(validAggregateFunction.isCount());
-        assertTrue(new AggregateFunction(AVG, "viewCount").isAverage());
+        assertTrue(AggregateFunction.builder()
+                .withAggregateFunction(AVG)
+                .withField("viewCount")
+                .build().isAverage());
     }
 
     @Test
     public void isSum() throws Exception {
         assertFalse(validAggregateFunction.isSum());
         assertTrue(validAggregateFunction.isCount());
-        assertTrue(new AggregateFunction(SUM, "viewCount").isSum());
+        assertTrue(AggregateFunction.builder()
+                .withAggregateFunction(SUM)
+                .withField("viewCount")
+                .build().isSum());
     }
 
     @Test
@@ -89,14 +104,20 @@ public class AggregateFunctionTest {
     @Test
     public void getGroupBy() throws Exception {
         assertTrue(validAggregateFunction.getGroupBy().isEmpty());
-        assertFalse(new AggregateFunction(COUNT, "viewCount",
-                Collections.singletonList(new GroupingConfiguration("viewCount"))).getGroupBy().isEmpty());
+        assertFalse(AggregateFunction.builder()
+                .withAggregateFunction(COUNT)
+                .withField("viewCount")
+                .withGroupBy(Collections.singletonList(GroupingConfiguration.builder().withGroupBy("viewCount").build()))
+                .build().getGroupBy().isEmpty());
     }
 
     @Test
     public void hasGrouping() throws Exception {
         assertFalse(validAggregateFunction.hasGrouping());
-        assertTrue(new AggregateFunction(COUNT, "viewCount",
-                Collections.singletonList(new GroupingConfiguration("viewCount"))).hasGrouping());
+        assertTrue(AggregateFunction.builder()
+                .withAggregateFunction(COUNT)
+                .withField("viewCount")
+                .withGroupBy(Collections.singletonList(GroupingConfiguration.builder().withGroupBy("viewCount").build()))
+                .build().hasGrouping());
     }
 }

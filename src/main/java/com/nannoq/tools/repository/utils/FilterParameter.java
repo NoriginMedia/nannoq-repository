@@ -32,6 +32,8 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * This class defines the operation to be performed on a specific field, with OR and AND types included.
@@ -39,7 +41,7 @@ import javax.annotation.Nonnull;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class FilterParameter<E extends Model> {
+public class FilterParameter {
     private String field;
     private Object eq;
     private Object ne;
@@ -52,21 +54,23 @@ public class FilterParameter<E extends Model> {
     private Object beginsWith;
     private Object[] in;
     private String type;
-    private Class<E> classType;
 
     public enum FILTER_TYPE {AND, OR}
 
     public FilterParameter() {}
 
-    public static <T extends Model> FilterParameterBuilder<T> builder() {
-        return new FilterParameterBuilder<>();
+    public static FilterParameterBuilder builder() {
+        return new FilterParameterBuilder();
+    }
+
+    public static FilterParameterBuilder builder(String field) {
+        return new FilterParameterBuilder(field);
     }
 
     @SuppressWarnings("WeakerAccess")
-    public static class FilterParameterBuilder<E extends Model> {
+    public static class FilterParameterBuilder {
         private static final Logger logger = LoggerFactory.getLogger(FilterParameterBuilder.class.getSimpleName());
 
-        private Class<E> klazz;
         private String field;
 
         private Object eq;
@@ -81,24 +85,22 @@ public class FilterParameter<E extends Model> {
         private Object[] in;
         private String type;
 
-        private boolean klazzSet = false;
         private boolean fieldSet = false;
         private boolean operatorSet = false;
         private boolean typeSet = false;
 
         private FilterParameterBuilder() {}
 
-        public FilterParameter<E> build() {
+        private FilterParameterBuilder(String field) {
+            withField(field);
+        }
+
+        public FilterParameter build() {
             if (field == null) {
                 throw new IllegalArgumentException("Field cannot be null for a filter by parameter!");
             }
 
-            if (klazz == null) {
-                throw new IllegalArgumentException("Klazz cannot be null for a filter parameter!");
-            }
-
-            FilterParameter<E> param = new FilterParameter<>();
-            param.classType = klazz;
+            FilterParameter param = new FilterParameter();
             param.field = field;
             param.eq = eq;
             param.ne = ne;
@@ -123,20 +125,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        @SuppressWarnings("unchecked")
-        public FilterParameterBuilder<E> withKlazz(Class<E> klazz) {
-            if (klazzSet) {
-                throw new IllegalArgumentException("Klazz cannot be replaced after being initially set!");
-            }
-
-            klazzSet = true;
-            this.klazz = klazz;
-
-            return this;
-        }
-
-        @Fluent
-        public FilterParameterBuilder<E> withField(String field) {
+        public FilterParameterBuilder withField(String field) {
             if (fieldSet) {
                 throw new IllegalArgumentException("Field cannot be replaced after being initially set!");
             }
@@ -148,7 +137,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withEq(Object eq) {
+        public FilterParameterBuilder withEq(Object eq) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -160,7 +149,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withNe(Object ne) {
+        public FilterParameterBuilder withNe(Object ne) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -172,7 +161,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withGt(Object gt) {
+        public FilterParameterBuilder withGt(Object gt) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -184,7 +173,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withGe(Object ge) {
+        public FilterParameterBuilder withGe(Object ge) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -196,7 +185,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withLt(Object lt) {
+        public FilterParameterBuilder withLt(Object lt) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -208,7 +197,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withLe(Object le) {
+        public FilterParameterBuilder withLe(Object le) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -220,7 +209,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withBetween(Object gt, Object lt) {
+        public FilterParameterBuilder withBetween(Object gt, Object lt) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -233,7 +222,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withInclusiveBetween(Object ge, Object le) {
+        public FilterParameterBuilder withInclusiveBetween(Object ge, Object le) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -246,7 +235,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withGeLtVariableBetween(Object ge, Object lt) {
+        public FilterParameterBuilder withGeLtVariableBetween(Object ge, Object lt) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -259,7 +248,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withLeGtVariableBetween(Object gt, Object le) {
+        public FilterParameterBuilder withLeGtVariableBetween(Object gt, Object le) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -272,7 +261,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withContains(Object contains) {
+        public FilterParameterBuilder withContains(Object contains) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -284,7 +273,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withNotContains(Object notContains) {
+        public FilterParameterBuilder withNotContains(Object notContains) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -296,7 +285,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withBeginsWith(Object beginsWith) {
+        public FilterParameterBuilder withBeginsWith(Object beginsWith) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -308,7 +297,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withIn(Object[] in) {
+        public FilterParameterBuilder withIn(Object[] in) {
             if (operatorSet) {
                 throw new IllegalArgumentException("Operator cannot be replaced after being initially set!");
             }
@@ -320,7 +309,7 @@ public class FilterParameter<E extends Model> {
         }
 
         @Fluent
-        public FilterParameterBuilder<E> withType(FILTER_TYPE type) {
+        public FilterParameterBuilder withType(FILTER_TYPE type) {
             if (typeSet) {
                 throw new IllegalArgumentException("Type cannot be replaced after being initially set!");
             }
@@ -345,15 +334,8 @@ public class FilterParameter<E extends Model> {
     }
 
     @Fluent
-    public FilterParameter<E> setField(String field) {
+    public FilterParameter setField(String field) {
         this.field = field;
-
-        return this;
-    }
-
-    @Fluent
-    public FilterParameter<E> setClassType(Class<E> classType) {
-        this.classType = classType;
 
         return this;
     }
@@ -415,7 +397,7 @@ public class FilterParameter<E extends Model> {
     }
 
     @Fluent
-    public FilterParameter<E> setType(@Nonnull String type) {
+    public FilterParameter setType(@Nonnull String type) {
         switch (FILTER_TYPE.valueOf(type.toUpperCase())) {
             case AND:
                 this.type = "AND";
@@ -430,10 +412,6 @@ public class FilterParameter<E extends Model> {
         }
 
         return this;
-    }
-
-    public Class<E> getClassType() {
-        return classType;
     }
 
     public boolean isEq() {
@@ -526,5 +504,42 @@ public class FilterParameter<E extends Model> {
         } else {
             errors.put(field + "_error", "Advanced functions cannot be used in conjunction with simple functions.");
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        FilterParameter that = (FilterParameter) o;
+
+        return Objects.equals(field, that.field) &&
+                Objects.equals(eq, that.eq) &&
+                Objects.equals(ne, that.ne) &&
+                Objects.equals(gt, that.gt) &&
+                Objects.equals(ge, that.ge) &&
+                Objects.equals(lt, that.lt) &&
+                Objects.equals(le, that.le) &&
+                Objects.equals(contains, that.contains) &&
+                Objects.equals(notContains, that.notContains) &&
+                Objects.equals(beginsWith, that.beginsWith) &&
+                Arrays.equals(in, that.in) &&
+                Objects.equals(getType(), that.getType());
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(field,
+                eq == null ? 1234L : eq.toString(),
+                ne == null ? 1234L : ne.toString(),
+                gt == null ? 1234L : gt.toString(),
+                ge == null ? 1234L : ge.toString(),
+                lt == null ? 1234L : lt.toString(),
+                le == null ? 1234L : le.toString(),
+                contains == null ? 1234L : contains.toString(),
+                notContains == null ? 1234L : notContains.toString(),
+                beginsWith == null ? 1234L : beginsWith.toString(), getType());
+        result = 31 * result + Arrays.hashCode(in);
+
+        return result;
     }
 }

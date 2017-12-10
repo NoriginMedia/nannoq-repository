@@ -25,27 +25,68 @@
 
 package com.nannoq.tools.repository.models;
 
-import com.nannoq.tools.repository.utils.QueryPack;
+import com.nannoq.tools.repository.dynamodb.model.TestModel;
+import com.nannoq.tools.repository.utils.*;
 import org.junit.Test;
 
+import java.util.Collections;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
+import static com.nannoq.tools.repository.utils.AggregateFunctions.COUNT;
+import static com.nannoq.tools.repository.utils.AggregateFunctions.MAX;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class QueryPackTest {
     @Test
     public void getBaseEtagKey() throws Exception {
-        String onlyRoute = ModelUtils.returnNewEtag("route".hashCode());
-        String withQuery = ModelUtils.returnNewEtag("route".hashCode() + "query".hashCode());
+        QueryPack queryPack = QueryPack.builder(TestModel.class).build();
 
-        QueryPack queryPackRoute = QueryPack.builder()
-                .withRoute("route")
+        assertNotNull(queryPack.getBaseEtagKey());
+    }
+
+    @Test
+    public void testBaseKey() throws Exception {
+        QueryPack queryPack = makePack("NoTag", null);
+        QueryPack queryPackTwo = makePack("62ecb02196f36ddbb81c72b1513bb81", null);
+
+        assertEquals(queryPack.getBaseEtagKey(), queryPackTwo.getBaseEtagKey());
+    }
+
+    private QueryPack makePack(String etag, String pageToken) {
+        Queue<OrderByParameter> queue = new ConcurrentLinkedDeque<>();
+        queue.add(OrderByParameter.builder()
+                .withField("someLong")
+                .build());
+
+        AggregateFunction aggregateFunction = AggregateFunction.builder()
+                .withAggregateFunction(MAX)
+                .withField("someLong")
+                .withGroupBy(Collections.singletonList(GroupingConfiguration.builder()
+                        .withGroupBy("someLong")
+                        .withGroupByUnit("INTEGER")
+                        .withGroupByRange(10000)
+                        .build()))
                 .build();
 
-        QueryPack queryPackBoth = QueryPack.builder()
-                .withRoute("route")
-                .withQuery("query")
+        return QueryPack.builder(TestModel.class)
+                .withCustomRoute("/parent/testString/testModels")
+                .withCustomQuery(null)
+                .withPageToken(pageToken)
+                .withRequestEtag(etag)
+                .withOrderByQueue(queue)
+                .withFilterParameters(Collections.singletonMap("someBoolean",
+                        Collections.singletonList(FilterParameter.builder("someBoolean")
+                                .withEq("true")
+                                .build())))
+                .withAggregateFunction(aggregateFunction)
+                .withProjections(new String[]{"someStringOne"})
+                .withIndexName(PAGINATION_INDEX)
+                .withLimit(0)
                 .build();
-
-        assertEquals(onlyRoute, queryPackRoute.getBaseEtagKey());
-        assertEquals(withQuery, queryPackBoth.getBaseEtagKey());
     }
 }

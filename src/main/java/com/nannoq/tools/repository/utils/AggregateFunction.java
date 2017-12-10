@@ -27,11 +27,17 @@ package com.nannoq.tools.repository.utils;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.nannoq.tools.repository.models.ETagable;
+import io.vertx.codegen.annotations.Fluent;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+import static com.nannoq.tools.repository.utils.AggregateFunctions.COUNT;
 import static java.util.stream.Collectors.toList;
 
 /**
@@ -55,15 +61,58 @@ public class AggregateFunction {
         this.groupBy = new ArrayList<>();
     }
 
-    public AggregateFunction(AggregateFunctions function, String field) {
-        this(function, field, new ArrayList<>());
+    public static AggregateFunctionBuilder builder() {
+        return new AggregateFunctionBuilder();
     }
 
-    public AggregateFunction(AggregateFunctions function, String field, List<GroupingConfiguration> groupBy) {
-        this.function = function;
-        this.field = field;
-        this.groupBy = groupBy == null ? new ArrayList<>() : groupBy;
-        this.validationError = new JsonObject();
+    @SuppressWarnings("WeakerAccess")
+    public static class AggregateFunctionBuilder {
+        private static final Logger logger = LoggerFactory.getLogger(FilterParameter.FilterParameterBuilder.class.getSimpleName());
+
+        private AggregateFunctions function;
+        private String field;
+        private List<GroupingConfiguration> groupBy = new ArrayList<>();
+
+        private AggregateFunctionBuilder() {
+        }
+
+        public AggregateFunction build() {
+            if (function == null) {
+                throw new IllegalArgumentException("Function cannot be null!");
+            }
+
+            if (field == null && function != COUNT) {
+                throw new IllegalArgumentException("Field cannot be null!");
+            }
+
+            AggregateFunction func = new AggregateFunction();
+            func.function = function;
+            func.field = field;
+            func.groupBy = groupBy == null ? new ArrayList<>() : groupBy;
+
+            return func;
+        }
+
+        @Fluent
+        public AggregateFunctionBuilder withAggregateFunction(AggregateFunctions function) {
+            this.function = function;
+
+            return this;
+        }
+
+        @Fluent
+        public AggregateFunctionBuilder withField(String field) {
+            this.field = field;
+
+            return this;
+        }
+
+        @Fluent
+        public AggregateFunctionBuilder withGroupBy(@Nonnull List<GroupingConfiguration> groupBy) {
+            this.groupBy = groupBy;
+
+            return this;
+        }
     }
 
     public AggregateFunctions getFunction() {
@@ -87,7 +136,7 @@ public class AggregateFunction {
     }
 
     public boolean isCount() {
-        return function == AggregateFunctions.COUNT;
+        return function == COUNT;
     }
 
     public List<GroupingConfiguration> getGroupBy() {
@@ -142,5 +191,21 @@ public class AggregateFunction {
 
     public JsonObject getValidationError() {
         return validationError;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AggregateFunction that = (AggregateFunction) o;
+
+        return function == that.function &&
+                Objects.equals(field, that.field) &&
+                Objects.equals(groupBy, that.groupBy);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(function, field, groupBy);
     }
 }

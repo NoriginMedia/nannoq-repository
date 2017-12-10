@@ -31,6 +31,7 @@ import io.vertx.core.json.JsonObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static java.util.stream.Collectors.toList;
 
@@ -143,5 +144,21 @@ public class CrossModelAggregateFunction {
 
     public JsonObject getValidationError() {
         return validationError;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CrossModelAggregateFunction that = (CrossModelAggregateFunction) o;
+
+        return function == that.function &&
+                Objects.equals(field, that.field) &&
+                Objects.equals(groupBy, that.groupBy);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(function, field, groupBy);
     }
 }

@@ -30,6 +30,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * This class defines projection configurations for cross table queries.
@@ -109,5 +110,21 @@ public class CrossTableProjection {
         }
 
         return errors;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CrossTableProjection that = (CrossTableProjection) o;
+
+        return Objects.equals(TABLES, that.TABLES) &&
+                Objects.equals(models, that.models) &&
+                Objects.equals(fields, that.fields);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(TABLES, models, fields);
     }
 }

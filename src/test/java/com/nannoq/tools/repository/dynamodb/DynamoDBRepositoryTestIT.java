@@ -38,10 +38,7 @@ import com.nannoq.tools.repository.dynamodb.service.TestModelInternalService;
 import com.nannoq.tools.repository.repository.results.CreateResult;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
-import com.nannoq.tools.repository.utils.AggregateFunction;
-import com.nannoq.tools.repository.utils.AggregateFunctions;
-import com.nannoq.tools.repository.utils.FilterParameter;
-import com.nannoq.tools.repository.utils.QueryPack;
+import com.nannoq.tools.repository.utils.*;
 import io.vertx.core.*;
 import io.vertx.core.eventbus.MessageConsumer;
 import io.vertx.core.json.JsonArray;
@@ -67,10 +64,13 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
+import static com.nannoq.tools.repository.utils.AggregateFunctions.MAX;
 import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.*;
 
@@ -194,7 +194,7 @@ public class DynamoDBRepositoryTestIT {
         List<Future> futures = new CopyOnWriteArrayList<>();
 
         IntStream.range(0, count).forEach(i -> {
-            TestModel testModel = (TestModel) nonNullTestModel.get().setRange(UUID.randomUUID().toString());
+            TestModel testModel = nonNullTestModel.get().setRange(UUID.randomUUID().toString());
 
             LocalDate startDate = LocalDate.of(1990, 1, 1);
             LocalDate endDate = LocalDate.now();
@@ -206,6 +206,7 @@ public class DynamoDBRepositoryTestIT {
 
             testModel.setSomeDate(new Date(randomEpochDay + 1000L));
             testModel.setSomeDateTwo(new Date(randomEpochDay));
+            testModel.setSomeLong(new Random().nextLong());
 
             items.add(testModel);
         });
@@ -625,12 +626,10 @@ public class DynamoDBRepositoryTestIT {
             testContext.assertTrue(res.succeeded());
             final JsonObject idObject = new JsonObject()
                     .put("hash", "testString");
-            final FilterParameter<TestModel> fp = FilterParameter.<TestModel>builder()
-                    .withKlazz(TestModel.class)
-                    .withField("someStringThree")
+            final FilterParameter fp = FilterParameter.builder("someStringThree")
                     .withEq("1")
                     .build();
-            final Map<String, List<FilterParameter<TestModel>>> fpList = new ConcurrentHashMap<>();
+            final Map<String, List<FilterParameter>> fpList = new ConcurrentHashMap<>();
             fpList.put("someLong", Collections.singletonList(fp));
 
             repo.readAll(idObject, fpList, allItemsRes -> {
@@ -681,9 +680,8 @@ public class DynamoDBRepositoryTestIT {
     private void pageAllResults(JsonObject idObject, String pageToken, String GSI,
                                 TestContext testContext, Async async) {
         @SuppressWarnings("ConstantConditions")
-        final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                .withRoute("TestModelReadAll")
-                .withQuery(pageToken == null ? "NoToken" : pageToken)
+        final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                .withPageToken(pageToken == null ? "NoToken" : pageToken)
                 .build();
         final Handler<AsyncResult<ItemListResult<TestModel>>> handler = allItemsRes -> {
             if (allItemsRes.succeeded()) {
@@ -725,10 +723,11 @@ public class DynamoDBRepositoryTestIT {
         createXItems(100, allRes -> {
             final JsonObject idObject = new JsonObject()
                     .put("hash", "testString");
-            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                    .withRoute("TestModelReadAll")
-                    .withQuery("NoToken")
-                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(AggregateFunctions.COUNT)
+                            .withField("someStringOne")
+                            .build())
                     .build();
 
             repo.aggregation(idObject, queryPack, new String[]{}, res -> {
@@ -742,16 +741,50 @@ public class DynamoDBRepositoryTestIT {
     }
 
     @Test
+    public void aggregationGroupedRanged(TestContext testContext) {
+        Async async = testContext.async();
+
+        createXItems(100, allRes -> {
+            final JsonObject idObject = new JsonObject()
+                    .put("hash", "testString");
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(MAX)
+                            .withField("someLong")
+                            .withGroupBy(Collections.singletonList(GroupingConfiguration.builder()
+                                    .withGroupBy("someLong")
+                                    .withGroupByUnit("INTEGER")
+                                    .withGroupByRange(10000)
+                                    .build()))
+                            .build())
+                    .build();
+
+            AtomicInteger etagOne = new AtomicInteger();
+
+            repo.aggregation(idObject, queryPack, new String[]{}, res -> {
+                etagOne.set(res.result().hashCode());
+
+                repo.aggregation(idObject, queryPack, new String[]{}, secondRes -> {
+                    testContext.assertEquals(etagOne.get(), secondRes.result().hashCode());
+                    async.complete();
+                });
+            });
+        });
+    }
+
+    @Test
     public void aggregationWithGSI(TestContext testContext) {
         Async async = testContext.async();
 
         createXItems(100, allRes -> {
             final JsonObject idObject = new JsonObject()
                     .put("hash", "testStringThree");
-            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                    .withRoute("TestModelReadAllGSI")
-                    .withQuery("NoToken")
-                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringThree"))
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withCustomQuery("TEST_GSI")
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(AggregateFunctions.COUNT)
+                            .withField("someStringThree")
+                            .build())
                     .build();
 
             repo.aggregation(idObject, queryPack, new String[]{}, "TEST_GSI", res -> {
@@ -776,14 +809,12 @@ public class DynamoDBRepositoryTestIT {
     public void readAllWithoutPagination(TestContext testContext) {
         Async async = testContext.async();
 
-        createXItems(100, allItemsRes -> {
-            repo.readAllWithoutPagination("testString", allItems -> {
-                testContext.assertTrue(allItems.succeeded());
-                testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
+        createXItems(100, allItemsRes -> repo.readAllWithoutPagination("testString", allItems -> {
+            testContext.assertTrue(allItems.succeeded());
+            testContext.assertEquals(100, allItems.result().size(), "Size incorrect: " + allItems.result().size());
 
-                async.complete();
-            });
-        });
+            async.complete();
+        }));
     }
 
     @Test
@@ -791,10 +822,11 @@ public class DynamoDBRepositoryTestIT {
         Async async = testContext.async();
 
         createXItems(100, allItemsRes -> {
-            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                    .withRoute("TestModelReadAll")
-                    .withQuery("NoToken")
-                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(AggregateFunctions.COUNT)
+                            .withField("someStringOne")
+                            .build())
                     .build();
 
             repo.readAllWithoutPagination("testString", queryPack, allItems -> {
@@ -811,10 +843,11 @@ public class DynamoDBRepositoryTestIT {
         Async async = testContext.async();
 
         createXItems(100, allItemsRes -> {
-            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                    .withRoute("TestModelReadAll")
-                    .withQuery("NoToken")
-                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(AggregateFunctions.COUNT)
+                            .withField("someStringOne")
+                            .build())
                     .build();
 
             repo.readAllWithoutPagination("testString", queryPack, new String[]{}, allItems -> {
@@ -831,10 +864,12 @@ public class DynamoDBRepositoryTestIT {
         Async async = testContext.async();
 
         createXItems(100, allItemsRes -> {
-            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                    .withRoute("TestModelReadAll")
-                    .withQuery("NoToken")
-                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withCustomQuery("TEST_GSI")
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(AggregateFunctions.COUNT)
+                            .withField("someStringOne")
+                            .build())
                     .build();
 
             repo.readAllWithoutPagination("testStringThree", queryPack, new String[]{}, "TEST_GSI", allItems -> {
@@ -851,10 +886,11 @@ public class DynamoDBRepositoryTestIT {
         Async async = testContext.async();
 
         createXItems(100, allItemsRes -> {
-            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                    .withRoute("TestModelReadAll")
-                    .withQuery("NoToken")
-                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringOne"))
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(AggregateFunctions.COUNT)
+                            .withField("someStringOne")
+                            .build())
                     .build();
 
             repo.readAllWithoutPagination(queryPack, new String[]{}, allItems -> {
@@ -871,10 +907,12 @@ public class DynamoDBRepositoryTestIT {
         Async async = testContext.async();
 
         createXItems(100, allItemsRes -> {
-            final QueryPack<TestModel> queryPack = QueryPack.<TestModel>builder()
-                    .withRoute("TestModelReadAll")
-                    .withQuery("NoToken")
-                    .withAggregateFunction(new AggregateFunction(AggregateFunctions.COUNT, "someStringThree"))
+            final QueryPack queryPack = QueryPack.builder(TestModel.class)
+                    .withCustomQuery("TEST_GSI")
+                    .withAggregateFunction(AggregateFunction.builder()
+                            .withAggregateFunction(AggregateFunctions.COUNT)
+                            .withField("someStringThree")
+                            .build())
                     .build();
 
             repo.readAllWithoutPagination(queryPack, new String[]{}, "TEST_GSI", allItems -> {

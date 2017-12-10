@@ -29,6 +29,8 @@ import io.vertx.codegen.annotations.Fluent;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
+import java.util.Objects;
+
 /**
  * This class defines an orderByParameter, which is used for sorting results.
  *
@@ -113,5 +115,20 @@ public class OrderByParameter {
 
     public boolean isValid() {
         return field != null && ((isAsc() && !isDesc()) || (isDesc() && !isAsc()));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OrderByParameter that = (OrderByParameter) o;
+
+        return Objects.equals(field, that.field) &&
+                Objects.equals(direction, that.direction);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(field, direction);
     }
 }

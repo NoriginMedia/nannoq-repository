@@ -393,7 +393,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         });
     }
 
-    public void readAll(JsonObject identifiers, Map<String, List<FilterParameter<E>>> filterParameterMap,
+    public void readAll(JsonObject identifiers, Map<String, List<FilterParameter>> filterParameterMap,
                         Handler<AsyncResult<List<E>>> resultHandler) {
         vertx.<List<E>>executeBlocking(future -> {
             try {
@@ -448,24 +448,24 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         });
     }
 
-    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections,
+    public void readAll(JsonObject identifiers, String pageToken, QueryPack queryPack, String[] projections,
                         Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
         readAll(identifiers, pageToken, queryPack, projections, null, resultHandler);
     }
 
-    public void readAll(String pageToken, QueryPack<E> queryPack, String[] projections,
+    public void readAll(String pageToken, QueryPack queryPack, String[] projections,
                         Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
         readAll(new JsonObject(), pageToken, queryPack, projections, null, resultHandler);
     }
 
-    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections,
+    public void readAll(JsonObject identifiers, String pageToken, QueryPack queryPack, String[] projections,
                         String GSI, Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
         AtomicLong startTime = new AtomicLong();
         startTime.set(System.nanoTime());
 
         String hash = identifiers.getString("hash");
         String cacheId = TYPE.getSimpleName() + "_" + hash +
-                (queryPack.getQuery() != null ? "/" + queryPack.getQuery() : "/START");
+                (queryPack.getBaseEtagKey() != null ? "/" + queryPack.getBaseEtagKey() : "/START");
 
         if (logger.isDebugEnabled()) { logger.debug("Running readAll with: " + hash + " : " + cacheId); }
 
@@ -482,7 +482,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 if (logger.isDebugEnabled()) { logger.debug("Served cached version of: " + cacheId); }
             } else {
                 Queue<OrderByParameter> orderByQueue = queryPack.getOrderByQueue();
-                Map<String, List<FilterParameter<E>>> params = queryPack.getParams();
+                Map<String, List<FilterParameter>> params = queryPack.getParams();
                 String indexName = queryPack.getIndexName();
                 Integer limit = queryPack.getLimit();
 
@@ -517,7 +517,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
     }
 
     @SuppressWarnings("unchecked")
-    private void returnDatabaseContent(QueryPack<E> queryPack, JsonObject identifiers, String pageToken,
+    private void returnDatabaseContent(QueryPack queryPack, JsonObject identifiers, String pageToken,
                                        String hash, String etagKey,
                                        String cacheId, DynamoDBQueryExpression<E> filteringExpression,
                                        String[] projections, String GSI,
@@ -526,8 +526,8 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
             Boolean multiple = identifiers.getBoolean(MULTIPLE_KEY);
             boolean unFilteredIndex = filteringExpression == null;
             String alternateIndex = null;
-            Map<String, List<FilterParameter<E>>> params = queryPack.getParams();
-            List<FilterParameter<E>> nameParams = params == null ? null : params.get(PAGINATION_IDENTIFIER);
+            Map<String, List<FilterParameter>> params = queryPack.getParams();
+            List<FilterParameter> nameParams = params == null ? null : params.get(PAGINATION_IDENTIFIER);
             Future<ItemListResult<E>> itemListFuture = Future.future();
 
             if (logger.isDebugEnabled()) {
@@ -847,7 +847,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 preOperationTime, operationTime, postOperationTime);
     }
 
-    private void runIllegalRangedKeyQueryAsScan(String baseEtagKey, String hash, QueryPack<E> queryPack,
+    private void runIllegalRangedKeyQueryAsScan(String baseEtagKey, String hash, QueryPack queryPack,
                                                 String GSI, String[] projections, String pageToken,
                                                 boolean unFilteredIndex, String alternateIndex,
                                                 AtomicLong startTime, Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
@@ -942,7 +942,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
     }
 
     private void runRootQuery(String baseEtagKey, Boolean multiple, JsonObject identifiers, String hash,
-                              QueryPack<E> queryPack, DynamoDBQueryExpression<E> filteringExpression,
+                              QueryPack queryPack, DynamoDBQueryExpression<E> filteringExpression,
                               String GSI, String[] projections, String pageToken, boolean unFilteredIndex,
                               String alternateIndex, AtomicLong startTime,
                               Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
@@ -1032,7 +1032,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 preOperationTime, operationTime, postOperationTime);
     }
 
-    private void rootRootQuery(String baseEtagKey, QueryPack<E> queryPack, String GSI, String pageToken, String[] projections,
+    private void rootRootQuery(String baseEtagKey, QueryPack queryPack, String GSI, String pageToken, String[] projections,
                                boolean unFilteredIndex, String alternateIndex, AtomicLong startTime,
                                Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
         AtomicLong preOperationTime = new AtomicLong();
@@ -1276,22 +1276,22 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
         });
     }
 
-    public void readAllWithoutPagination(String identifier, QueryPack<E> queryPack,
+    public void readAllWithoutPagination(String identifier, QueryPack queryPack,
                                          Handler<AsyncResult<List<E>>> resultHandler) {
         readAllWithoutPagination(identifier, queryPack, null, resultHandler);
     }
 
     @SuppressWarnings("unused")
-    public void readAllWithoutPagination(QueryPack<E> queryPack, String[] projections,
+    public void readAllWithoutPagination(QueryPack queryPack, String[] projections,
                                          Handler<AsyncResult<List<E>>> resultHandler) {
         readAllWithoutPagination(queryPack, projections, null, resultHandler);
     }
 
-    public void readAllWithoutPagination(QueryPack<E> queryPack, String[] projections,
+    public void readAllWithoutPagination(QueryPack queryPack, String[] projections,
                                          String GSI, Handler<AsyncResult<List<E>>> resultHandler) {
-        Map<String, List<FilterParameter<E>>> params = null;
+        Map<String, List<FilterParameter>> params = null;
         if (queryPack != null) params = queryPack.getParams();
-        final Map<String, List<FilterParameter<E>>> finalParams = params;
+        final Map<String, List<FilterParameter>> finalParams = params;
 
         if (logger.isDebugEnabled()) {
             logger.debug("Running aggregation non pagination scan!");
@@ -1354,12 +1354,12 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
     }
 
     @SuppressWarnings("WeakerAccess")
-    public void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, String[] projections,
+    public void readAllWithoutPagination(String identifier, QueryPack queryPack, String[] projections,
                                          Handler<AsyncResult<List<E>>> resultHandler) {
         readAllWithoutPagination(identifier, queryPack, projections, null, resultHandler);
     }
 
-    public void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, String[] projections,
+    public void readAllWithoutPagination(String identifier, QueryPack queryPack, String[] projections,
                                          String GSI, Handler<AsyncResult<List<E>>> resultHandler) {
         vertx.<List<E>>executeBlocking(future -> {
             try {
@@ -1368,7 +1368,7 @@ public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheab
                 }
 
                 Queue<OrderByParameter> orderByQueue = queryPack.getOrderByQueue();
-                Map<String, List<FilterParameter<E>>> params = queryPack.getParams();
+                Map<String, List<FilterParameter>> params = queryPack.getParams();
                 String indexName = queryPack.getIndexName();
 
                 if (logger.isDebugEnabled()) { logger.debug("Building expression..."); }

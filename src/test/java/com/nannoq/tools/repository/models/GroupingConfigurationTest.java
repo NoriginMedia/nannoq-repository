@@ -37,21 +37,24 @@ public class GroupingConfigurationTest {
 
     @Before
     public void setUp() throws Exception {
-        validGroupingConfiguration = new GroupingConfiguration("releaseDate");
+        validGroupingConfiguration = GroupingConfiguration.builder()
+                .withGroupBy("releaseDate")
+                .withFullList(true)
+                .build();
     }
 
     @Test
     public void isFullList() throws Exception {
-        assertFalse(validGroupingConfiguration.isFullList());
-        validGroupingConfiguration.setFullList(true);
         assertTrue(validGroupingConfiguration.isFullList());
     }
 
     @Test
     public void hasGroupRanging() throws Exception {
         assertFalse(validGroupingConfiguration.hasGroupRanging());
-        validGroupingConfiguration = new GroupingConfiguration(
-                "releaseDate", "DATE", "WEEK");
+        validGroupingConfiguration = GroupingConfiguration.builder()
+                .withGroupBy("releaseDate")
+                .withGroupByUnit("DATE")
+                .withGroupByRange("WEEK").build();
         assertTrue(validGroupingConfiguration.hasGroupRanging());
     }
 }

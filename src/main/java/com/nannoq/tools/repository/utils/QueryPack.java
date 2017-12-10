@@ -33,9 +33,7 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.web.RoutingContext;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
 /**
  * This class defines the querypack. A querypack includes the orderByQueue, the map of filterparameters to be performed,
@@ -44,59 +42,75 @@ import java.util.Queue;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class QueryPack<E extends Model> {
+public class QueryPack {
     private String query;
     private String baseEtagKey;
     private String route;
+    private String pageToken;
     private String requestEtag;
     private Queue<OrderByParameter> orderByQueue;
-    private Map<String, List<FilterParameter<E>>> params;
+    private Map<String, List<FilterParameter>> params;
     private AggregateFunction aggregateFunction;
+    private String[] projections;
     private String indexName;
     private Integer limit;
 
     private QueryPack() {}
 
-    public static <T extends ETagable & Model> QueryPackBuilder<T> builder() {
-        return new QueryPackBuilder<>();
+    public static QueryPackBuilder builder() {
+        return builder(null);
     }
 
-    public static class QueryPackBuilder<E extends ETagable & Model> {
+    public static QueryPackBuilder builder(Class model) {
+        return new QueryPackBuilder(model);
+    }
+
+    public static class QueryPackBuilder {
         private static Logger logger = LoggerFactory.getLogger(QueryPackBuilder.class.getSimpleName());
 
         private String query;
-        private String baseEtagKey;
         private String route;
+        private String pageToken;
         private String requestEtag;
         private Queue<OrderByParameter> orderByQueue;
-        private Map<String, List<FilterParameter<E>>> params;
+        private Map<String, List<FilterParameter>> params;
         private AggregateFunction aggregateFunction;
+        private String[] projections;
         private String indexName;
         private Integer limit;
 
-        private QueryPackBuilder() {}
+        private QueryPackBuilder(Class model) {
+            if (model != null) {
+                route = model.getSimpleName();
+            }
+        }
 
-        public QueryPack<E> build() {
-            baseEtagKey = ModelUtils.returnNewEtag(
-                    query == null ? route.hashCode() : route.hashCode() + query.hashCode());
+        public QueryPack build() {
+            if (route == null) {
+                throw new IllegalArgumentException("Route cannot be null, " +
+                        "set class in constructor, or use withRoutingContext or withCustomRoute!");
+            }
 
-            QueryPack<E> queryPack = new QueryPack<>();
+            QueryPack queryPack = new QueryPack();
             queryPack.query = query;
-            queryPack.baseEtagKey = baseEtagKey;
             queryPack.route = route;
+            queryPack.pageToken = pageToken;
             queryPack.requestEtag = requestEtag;
             queryPack.orderByQueue = orderByQueue;
+            queryPack.projections = projections;
             queryPack.params = params;
             queryPack.aggregateFunction = aggregateFunction;
             queryPack.indexName = indexName;
             queryPack.limit = limit;
+            queryPack.calculateKey();
 
             return queryPack;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withRoutingContext(RoutingContext routingContext) {
+        public QueryPackBuilder withRoutingContext(RoutingContext routingContext) {
             this.requestEtag = routingContext.request().getHeader("If-None-Match");
+            this.pageToken = routingContext.request().getParam("pageToken");
             this.query = routingContext.request().query();
             this.route = routingContext.request().path();
 
@@ -104,61 +118,78 @@ public class QueryPack<E extends Model> {
         }
 
         @Fluent
-        public QueryPackBuilder<E> withQuery(String query) {
+        public QueryPackBuilder withCustomRoute(String route) {
+            this.route = route;
+
+            return this;
+        }
+
+        @Fluent
+        public QueryPackBuilder withCustomQuery(String query) {
             this.query = query;
 
             return this;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withRoute(String route) {
-            this.route = route;
-            if (route == null) this.route = "NoRoute";
+        public QueryPackBuilder withPageToken(String pageToken) {
+            this.pageToken = pageToken;
 
             return this;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withRequestEtag(String requestEtag) {
+        public QueryPackBuilder withProjections(String[] projections) {
+            this.projections = projections;
+
+            return this;
+        }
+
+        @Fluent
+        public QueryPackBuilder withRequestEtag(String requestEtag) {
             this.requestEtag = requestEtag;
 
             return this;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withFilterParameters(Map<String, List<FilterParameter<E>>> params) {
+        public QueryPackBuilder withFilterParameters(Map<String, List<FilterParameter>> params) {
             this.params = params;
 
             return this;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withOrderByQueue(Queue<OrderByParameter> orderByQueue) {
+        public QueryPackBuilder withOrderByQueue(Queue<OrderByParameter> orderByQueue) {
             this.orderByQueue = orderByQueue;
 
             return this;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withAggregateFunction(AggregateFunction aggregateFunction) {
+        public QueryPackBuilder withAggregateFunction(AggregateFunction aggregateFunction) {
             this.aggregateFunction = aggregateFunction;
 
             return this;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withIndexName(String indexName) {
+        public QueryPackBuilder withIndexName(String indexName) {
             this.indexName = indexName;
 
             return this;
         }
 
         @Fluent
-        public QueryPackBuilder<E> withLimit(Integer limit) {
+        public QueryPackBuilder withLimit(Integer limit) {
             this.limit = limit;
 
             return this;
         }
+    }
+
+    private void calculateKey() {
+        baseEtagKey = ModelUtils.returnNewEtag(Objects.hashCode(this));
     }
 
     public String getBaseEtagKey() {
@@ -173,6 +204,10 @@ public class QueryPack<E extends Model> {
         return route;
     }
 
+    public String getPageToken() {
+        return pageToken;
+    }
+
     public String getRequestEtag() {
         return requestEtag;
     }
@@ -181,12 +216,16 @@ public class QueryPack<E extends Model> {
         return orderByQueue;
     }
 
-    public Map<String, List<FilterParameter<E>>> getParams() {
+    public Map<String, List<FilterParameter>> getParams() {
         return params;
     }
 
     public AggregateFunction getAggregateFunction() {
         return aggregateFunction;
+    }
+
+    public String[] getProjections() {
+        return projections;
     }
 
     public String getIndexName() {
@@ -195,5 +234,31 @@ public class QueryPack<E extends Model> {
 
     public Integer getLimit() {
         return limit;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        QueryPack queryPack = (QueryPack) o;
+
+        return Objects.equals(baseEtagKey, queryPack.baseEtagKey);
+    }
+
+    @Override
+    public int hashCode() {
+        final int[] hash = {Objects.hash(query, route, pageToken, params, aggregateFunction, indexName, limit)};
+
+        if (orderByQueue != null) {
+            if (orderByQueue.size() > 0) {
+                orderByQueue.forEach(o -> hash[0] ^= o.hashCode());
+            }
+        }
+
+        if (projections != null) {
+            hash[0] ^= Arrays.hashCode(projections);
+        }
+
+        return hash[0];
     }
 }

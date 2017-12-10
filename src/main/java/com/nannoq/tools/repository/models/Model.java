@@ -50,6 +50,7 @@ public interface Model {
     List<ValidationError> validateCreate();
     List<ValidationError> validateUpdate();
 
+    Model setIdentifiers(JsonObject identifiers);
 
     Date getCreatedAt();
     Model setCreatedAt(Date date);

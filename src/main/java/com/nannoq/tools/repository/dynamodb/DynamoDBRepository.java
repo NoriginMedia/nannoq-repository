@@ -905,37 +905,37 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     @Override
-    public void readAll(JsonObject identifiers, Map<String, List<FilterParameter<E>>> filterParameterMap, Handler<AsyncResult<List<E>>> asyncResultHandler) {
+    public void readAll(JsonObject identifiers, Map<String, List<FilterParameter>> filterParameterMap, Handler<AsyncResult<List<E>>> asyncResultHandler) {
         reader.readAll(identifiers, filterParameterMap, asyncResultHandler);
     }
 
     @Override
-    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
+    public void readAll(JsonObject identifiers, String pageToken, QueryPack queryPack, String[] projections, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
         reader.readAll(identifiers, pageToken, queryPack, projections, asyncResultHandler);
     }
 
     @Override
-    public void readAll(String pageToken, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
+    public void readAll(String pageToken, QueryPack queryPack, String[] projections, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
         reader.readAll(pageToken, queryPack, projections, asyncResultHandler);
     }
 
-    public void readAll(JsonObject identifiers, String pageToken, QueryPack<E> queryPack, String[] projections, String GSI, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
+    public void readAll(JsonObject identifiers, String pageToken, QueryPack queryPack, String[] projections, String GSI, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
         reader.readAll(identifiers, pageToken, queryPack, projections, GSI, asyncResultHandler);
     }
 
     @Override
-    public void aggregation(JsonObject identifiers, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<String>> resultHandler) {
+    public void aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections, Handler<AsyncResult<String>> resultHandler) {
         aggregation(identifiers, queryPack, projections, null, resultHandler);
     }
 
-    public void aggregation(JsonObject identifiers, QueryPack<E> queryPack, String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {
+    public void aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {
         aggregates.aggregation(identifiers, queryPack, projections, GSI, resultHandler);
     }
 
     @Override
     public JsonObject buildParameters(Map<String, List<String>> queryMap,
                                       Field[] fields, Method[] methods, JsonObject errors,
-                                      Map<String, List<FilterParameter<E>>> params, int[] limit,
+                                      Map<String, List<FilterParameter>> params, int[] limit,
                                       Queue<OrderByParameter> orderByQueue, String[] indexName) {
         return parameters.buildParameters(queryMap, fields, methods, errors, params, limit, orderByQueue, indexName);
     }
@@ -946,26 +946,26 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     @Override
-    public void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, Handler<AsyncResult<List<E>>> asyncResultHandler) {
+    public void readAllWithoutPagination(String identifier, QueryPack queryPack, Handler<AsyncResult<List<E>>> asyncResultHandler) {
         reader.readAllWithoutPagination(identifier, queryPack, asyncResultHandler);
     }
 
     @Override
-    public void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<List<E>>> asyncResultHandler) {
+    public void readAllWithoutPagination(String identifier, QueryPack queryPack, String[] projections, Handler<AsyncResult<List<E>>> asyncResultHandler) {
         readAllWithoutPagination(identifier, queryPack, projections, null, asyncResultHandler);
     }
 
-    public void readAllWithoutPagination(String identifier, QueryPack<E> queryPack, String[] projections, String GSI,
+    public void readAllWithoutPagination(String identifier, QueryPack queryPack, String[] projections, String GSI,
                                          Handler<AsyncResult<List<E>>> asyncResultHandler) {
         reader.readAllWithoutPagination(identifier, queryPack, projections, GSI, asyncResultHandler);
     }
 
     @Override
-    public void readAllWithoutPagination(QueryPack<E> queryPack, String[] projections, Handler<AsyncResult<List<E>>> asyncResultHandler) {
+    public void readAllWithoutPagination(QueryPack queryPack, String[] projections, Handler<AsyncResult<List<E>>> asyncResultHandler) {
         readAllWithoutPagination(queryPack, projections, null, asyncResultHandler);
     }
 
-    public void readAllWithoutPagination(QueryPack<E> queryPack, String[] projections, String GSI, Handler<AsyncResult<List<E>>> asyncResultHandler) {
+    public void readAllWithoutPagination(QueryPack queryPack, String[] projections, String GSI, Handler<AsyncResult<List<E>>> asyncResultHandler) {
         reader.readAllWithoutPagination(queryPack, projections, GSI, asyncResultHandler);
     }
 
