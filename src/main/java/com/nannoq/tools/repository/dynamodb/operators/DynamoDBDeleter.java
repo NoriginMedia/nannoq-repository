@@ -43,9 +43,9 @@ import com.nannoq.tools.repository.repository.etag.ETagManager;
 import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.serviceproxy.ServiceException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,7 +62,7 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 public class DynamoDBDeleter<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LogManager.getLogger(DynamoDBDeleter.class.getSimpleName());
+    private static final Logger logger = LoggerFactory.getLogger(DynamoDBDeleter.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final Vertx vertx;

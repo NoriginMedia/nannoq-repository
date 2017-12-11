@@ -39,8 +39,8 @@ import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.utils.FilterParameter;
 import com.nannoq.tools.repository.utils.OrderByParameter;
 import io.vertx.core.json.*;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -61,7 +61,7 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 public class DynamoDBParameters<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LogManager.getLogger(DynamoDBParameters.class.getSimpleName());
+    private static final Logger logger = LoggerFactory.getLogger(DynamoDBParameters.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final DynamoDBRepository<E> db;

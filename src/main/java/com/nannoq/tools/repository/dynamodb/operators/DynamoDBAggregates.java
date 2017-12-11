@@ -38,8 +38,8 @@ import io.vertx.core.Handler;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 
 import java.time.Duration;
 import java.util.AbstractMap.SimpleEntry;
@@ -58,7 +58,7 @@ import static java.util.stream.Collectors.*;
  */
 @SuppressWarnings("Convert2MethodRef")
 public class DynamoDBAggregates<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LogManager.getLogger(DynamoDBAggregates.class.getSimpleName());
+    private static final Logger logger = LoggerFactory.getLogger(DynamoDBAggregates.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final DynamoDBRepository<E> db;

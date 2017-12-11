@@ -48,9 +48,9 @@ import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.serviceproxy.ServiceException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Field;
 import java.util.*;
@@ -68,7 +68,7 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 public class DynamoDBReader<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LogManager.getLogger(DynamoDBReader.class.getSimpleName());
+    private static final Logger logger = LoggerFactory.getLogger(DynamoDBReader.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final Vertx vertx;

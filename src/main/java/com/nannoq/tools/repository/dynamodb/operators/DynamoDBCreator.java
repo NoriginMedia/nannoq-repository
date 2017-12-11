@@ -43,10 +43,10 @@ import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import io.vertx.serviceproxy.ServiceException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 import java.util.function.Function;
@@ -60,7 +60,7 @@ import static java.util.stream.Collectors.toList;
  * @version 17.11.2017
  */
 public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cacheable> {
-    private static final Logger logger = LogManager.getLogger(DynamoDBCreator.class.getSimpleName());
+    private static final Logger logger = LoggerFactory.getLogger(DynamoDBCreator.class.getSimpleName());
 
     private final Class<E> TYPE;
     private final Vertx vertx;

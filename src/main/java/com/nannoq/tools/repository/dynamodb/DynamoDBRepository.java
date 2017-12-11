@@ -55,10 +55,10 @@ import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.logging.Logger;
+import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Field;
@@ -84,7 +84,7 @@ import static java.util.stream.Collectors.toList;
 @SuppressWarnings({"Convert2MethodRef", "Duplicates"})
 public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cacheable>
         implements Repository<E>, InternalRepositoryService<E> {
-    private static final Logger logger = LogManager.getLogger(DynamoDBRepository.class.getSimpleName());
+    private static final Logger logger = LoggerFactory.getLogger(DynamoDBRepository.class.getSimpleName());
 
     public static final String PAGINATION_INDEX = "PAGINATION_INDEX";
 
