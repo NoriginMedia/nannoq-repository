@@ -52,6 +52,7 @@ import javax.cache.expiry.AccessedExpiryPolicy;
 import javax.cache.expiry.ExpiryPolicy;
 import javax.cache.spi.CachingProvider;
 import java.util.*;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -488,17 +489,21 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
     }
 
     private void replaceTimeoutHandler(String cacheId, Future<Boolean> replaceFirst) {
-        vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-            if (!replaceFirst.isComplete() && !objectCache.isDestroyed()) {
-                objectCache.removeAsync(cacheId);
+        vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+            try {
+                vertx.executeBlocking(future -> {
+                    if (!replaceFirst.isComplete() && !objectCache.isDestroyed()) {
+                        objectCache.removeAsync(cacheId);
 
-                replaceFirst.tryComplete(Boolean.TRUE);
+                        replaceFirst.tryComplete(Boolean.TRUE);
 
-                logger.error("Cache timeout!");
-            }
+                        logger.error("Cache timeout!");
+                    }
 
-            future.complete();
-        }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
+                    future.complete();
+                }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
+            } catch (RejectedExecutionException ignored) {}
+        });
     }
 
     @Override
@@ -742,17 +747,21 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
         Future<Boolean> aggregationFuture = Future.future();
 
         if (isItemListCacheAvailable()) {
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                if (!itemListFuture.isComplete() && !itemListCache.isDestroyed()) {
-                    itemListCache.clear();
+            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+                try {
+                    vertx.executeBlocking(future -> {
+                        if (!itemListFuture.isComplete() && !itemListCache.isDestroyed()) {
+                            itemListCache.clear();
 
-                    itemListFuture.tryComplete();
+                            itemListFuture.tryComplete();
 
-                    logger.error("Cache Timeout!");
-                }
+                            logger.error("Cache Timeout!");
+                        }
 
-                future.complete();
-            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
+                        future.complete();
+                    }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
+                } catch (RejectedExecutionException ignored) {}
+            });
 
             purgeMap(ITEM_LIST_KEY_MAP, itemListCache, res -> {
                 if (res.failed()) {
@@ -768,17 +777,21 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
         }
 
         if (isAggregationCacheAvailable()) {
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
-                if (!aggregationFuture.isComplete() && !aggregationCache.isDestroyed()) {
-                    aggregationCache.clear();
+            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+                try {
+                    vertx.executeBlocking(future -> {
+                        if (!aggregationFuture.isComplete() && !aggregationCache.isDestroyed()) {
+                            aggregationCache.clear();
 
-                    aggregationFuture.tryComplete();
+                            aggregationFuture.tryComplete();
 
-                    logger.error("Cache timeout!");
-                }
+                            logger.error("Cache timeout!");
+                        }
 
-                future.complete();
-            }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
+                        future.complete();
+                    }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded()));
+                } catch (RejectedExecutionException ignored) {}
+            });
 
             purgeMap(AGGREGATION_KEY_MAP, aggregationCache, res -> {
                 if (res.failed()) {

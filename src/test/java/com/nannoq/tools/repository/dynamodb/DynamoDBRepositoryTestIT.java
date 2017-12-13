@@ -25,6 +25,9 @@
 
 package com.nannoq.tools.repository.dynamodb;
 
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsync;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsyncClient;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
 import com.amazonaws.services.dynamodbv2.datamodeling.S3Link;
@@ -173,8 +176,9 @@ public class DynamoDBRepositoryTestIT {
     public void tearDown(TestContext testContext) {
         Async async = testContext.async();
 
-        final AmazonDynamoDBAsyncClient amazonDynamoDBAsyncClient = new AmazonDynamoDBAsyncClient();
-        amazonDynamoDBAsyncClient.withEndpoint(config.getString("dynamo_endpoint"));
+        final AmazonDynamoDBAsync amazonDynamoDBAsyncClient = AmazonDynamoDBAsyncClient.asyncBuilder()
+                .withEndpointConfiguration(new EndpointConfiguration(config.getString("dynamo_endpoint"), "eu-west-1"))
+                .build();
         amazonDynamoDBAsyncClient.deleteTable(tableName);
 
         repo = null;
