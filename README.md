@@ -2,6 +2,22 @@
 
 nannoq-repository is a collection of repository implementations for Vert.x. All repositories operate with a unified querying interface that abstracts away the underlying data store. Individual implementations will be extended for any data store specific functionality that is not reasonable to abstract away.
 
+It supports:
+ - Caching, extends to clustered caching with JCache if vertx is clustered.
+ - Will refresh ETags if supplied an EtagManager implementation.
+ 
+Operations:
+ - Batch create/read/update/delete
+ - Queries
+   * Filtering
+   * Ordering
+   * Projections
+   * Aggregations
+ 
+Current implementations:
+ 
+ - AWS DynamoDB
+
 ## Prerequisites
 
 Vert.x >= 3.5.0
@@ -26,7 +42,7 @@ mvn clean verify -Dgpg.skip=true
 
 First install with either Maven:
 
-```
+```xml
 <dependency>
     <groupId>com.nannoq</groupId>
     <artifactId>repository</artifactId>
@@ -36,11 +52,15 @@ First install with either Maven:
 
 or Gradle:
 
-```
+```groovy
 dependencies {
     compile group: 'nannoq.com:repository:1.0.0'
 }
 ```
+
+### Implementation and Querying
+
+Please consult the [Wiki](https://github.com/mikand13/nannoq-repository/wiki) for guides on implementations and queries on the repositories.
 
 ## Contributing
 
