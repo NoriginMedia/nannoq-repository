@@ -105,7 +105,7 @@ public class RedisETagManagerImpl<E extends ETagable & Model> implements ETagMan
 
     @Override
     public void setSingleRecordEtag(Map<String, String> etagMap,
-                                    Handler<AsyncResult<Consumer<RedisClient>>> resultHandler) {
+                                    Handler<AsyncResult<Boolean>> resultHandler) {
         Consumer<RedisClient> consumer = redisClient -> etagMap.keySet()
                 .forEach(key -> redisClient.set(key, etagMap.get(key), result -> {
                     if (result.failed()) {
@@ -113,7 +113,9 @@ public class RedisETagManagerImpl<E extends ETagable & Model> implements ETagMan
                     }
                 }));
 
-        resultHandler.handle(Future.succeededFuture(consumer));
+        RedisUtils.performJedisWithRetry(REDIS_CLIENT, consumer);
+
+        resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
     }
 
     @Override

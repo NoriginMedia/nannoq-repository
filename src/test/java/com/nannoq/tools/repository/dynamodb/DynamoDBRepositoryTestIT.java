@@ -153,9 +153,13 @@ public class DynamoDBRepositoryTestIT {
             if (res.failed()) {
                 testContext.fail(res.cause());
             } else {
-                repo = new TestModelDynamoDBRepository(vertx, config);
-                serviceRegistration = ProxyHelper.registerService(TestModelInternalService.class, vertx, repo, "REPO");
-                service = ProxyHelper.createProxy(TestModelInternalService.class, vertx, "REPO");
+                try {
+                    repo = new TestModelDynamoDBRepository(vertx, config);
+                    serviceRegistration = ProxyHelper.registerService(TestModelInternalService.class, vertx, repo, "REPO");
+                    service = ProxyHelper.createProxy(TestModelInternalService.class, vertx, "REPO");
+                } catch (Exception e) {
+                    testContext.fail(e);
+                }
             }
 
             long redisChecker = System.currentTimeMillis();
@@ -1112,6 +1116,8 @@ public class DynamoDBRepositoryTestIT {
             repo.getRedisClient().info(info -> async.complete());
         } else {
             testContext.assertNull(repo.getRedisClient());
+
+            async.complete();
         }
     }
 }

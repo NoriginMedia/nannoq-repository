@@ -45,6 +45,7 @@ import com.nannoq.tools.repository.repository.cache.CacheManager;
 import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
 import com.nannoq.tools.repository.repository.cache.LocalCacheManagerImpl;
 import com.nannoq.tools.repository.repository.etag.ETagManager;
+import com.nannoq.tools.repository.repository.etag.InMemoryEtagManagerImpl;
 import com.nannoq.tools.repository.repository.etag.RedisETagManagerImpl;
 import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
@@ -194,7 +195,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                 this.etagManager = new RedisETagManagerImpl<>(type, getRedisClient());
                 isEtagEnabled = true;
             } else {
-                logger.warn("No Redis Configuration present, no etag management is initialized!");
+                this.etagManager = new InMemoryEtagManagerImpl<>(vertx, type);
             }
         }
 

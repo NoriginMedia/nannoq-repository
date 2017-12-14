@@ -130,8 +130,9 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                         if (logger.isDebugEnabled()) { logger.debug("Running remoteCreate..."); }
 
                         if (eTagManager != null) {
-                            eTagManager.setSingleRecordEtag(record.generateAndSetEtag(new HashMap<>()), tagResult ->
-                                    RedisUtils.performJedisWithRetry(REDIS_CLIENT, tagResult.result()));
+                            eTagManager.setSingleRecordEtag(record.generateAndSetEtag(new HashMap<>()), tagResult -> {
+                                if (tagResult.failed()) logger.error("Failed etag operation!", tagResult.cause());
+                            });
                         }
 
                         try {
@@ -203,9 +204,9 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                 newerVersion = db.setUpdatedAt(newerVersion);
 
                 if (eTagManager != null) {
-                    eTagManager.setSingleRecordEtag(newerVersion.generateAndSetEtag(new HashMap<>()),
-                            tagResult -> RedisUtils.performJedisWithRetry(
-                                    REDIS_CLIENT, tagResult.result()));
+                    eTagManager.setSingleRecordEtag(newerVersion.generateAndSetEtag(new HashMap<>()), tagResult -> {
+                        if (tagResult.failed()) logger.error("Failed etag operation!", tagResult.cause());
+                    });
                 }
 
                 if (logger.isDebugEnabled()) { logger.debug("Performing " + counter + " remoteUpdate!"); }
@@ -221,9 +222,9 @@ public class DynamoDBCreator<E extends DynamoDBModel & Model & ETagable & Cachea
                 newerVersion = db.setUpdatedAt(updatedRecord);
 
                 if (eTagManager != null) {
-                    eTagManager.setSingleRecordEtag(updatedRecord.generateAndSetEtag(new HashMap<>()),
-                            tagResult -> RedisUtils.performJedisWithRetry(
-                                    REDIS_CLIENT, tagResult.result()));
+                    eTagManager.setSingleRecordEtag(updatedRecord.generateAndSetEtag(new HashMap<>()), tagResult -> {
+                        if (tagResult.failed()) logger.error("Failed etag operation!", tagResult.cause());
+                    });
                 }
 
                 if (logger.isDebugEnabled()) { logger.debug("Performing immediate remoteUpdate!"); }
