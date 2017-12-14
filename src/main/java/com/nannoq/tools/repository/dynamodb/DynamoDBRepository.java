@@ -1296,4 +1296,9 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     public RedisClient getRedisClient() {
         return REDIS_CLIENT;
     }
+
+    @Override
+    public ETagManager<E> getEtagManager() {
+        return etagManager;
+    }
 }

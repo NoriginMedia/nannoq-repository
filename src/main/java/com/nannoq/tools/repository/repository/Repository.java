@@ -25,8 +25,10 @@
 
 package com.nannoq.tools.repository.repository;
 
+import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.models.ModelUtils;
+import com.nannoq.tools.repository.repository.etag.ETagManager;
 import com.nannoq.tools.repository.repository.results.*;
 import com.nannoq.tools.repository.utils.FilterParameter;
 import com.nannoq.tools.repository.utils.OrderByParameter;
@@ -611,4 +613,6 @@ public interface Repository<E extends Model> {
 
         return null;
     }
+
+    ETagManager getEtagManager();
 }
