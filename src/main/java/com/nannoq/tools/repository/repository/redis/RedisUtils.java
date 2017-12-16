@@ -43,6 +43,10 @@ import java.util.function.Consumer;
 public class RedisUtils {
     private static final Logger logger = LoggerFactory.getLogger(RedisUtils.class.getSimpleName());
 
+    public static RedisClient getRedisClient(JsonObject config) {
+        return getRedisClient(Vertx.currentContext().owner(), config);
+    }
+
     public static RedisClient getRedisClient(Vertx vertx, JsonObject config) {
         String redisServer = config.getString("redis_host");
         Integer redisPort = config.getInteger("redis_port");

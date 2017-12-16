@@ -15,7 +15,7 @@
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>A collection of classes for advanced queries on multiple data sources on Vert.x</description>
-    <url>https://github.com/AspiroTV/nannoq-repository</url>
+    <url>https://github.com/NoriginMedia/nannoq-repository</url>
 
     <licenses>
         <license>
@@ -34,9 +34,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/AspiroTV/nannoq-repository.git</connection>
-        <developerConnection>scm:git:ssh://github.com:AspiroTV/nannoq-repository.git</developerConnection>
-        <url>https://github.com/mikand13/nannoq-repository/tree/master</url>
+        <connection>scm:git:git://github.com/NoriginMedia/nannoq-repository.git</connection>
+        <developerConnection>scm:git:ssh://github.com:NoriginMedia/nannoq-repository.git</developerConnection>
+        <url>https://github.com/NoriginMedia/nannoq-repository/tree/master</url>
     </scm>
 
     <properties>

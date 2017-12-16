@@ -44,19 +44,19 @@ import java.util.Map;
  * @author Anders Mikkelsen
  * @version 17.11.2017
  */
-public class InMemoryEtagManagerImpl<E extends ETagable & Model> implements ETagManager<E> {
-    private Logger logger = LoggerFactory.getLogger(InMemoryEtagManagerImpl.class.getSimpleName());
+public class InMemoryETagManagerImpl<E extends ETagable & Model> implements ETagManager<E> {
+    private Logger logger = LoggerFactory.getLogger(InMemoryETagManagerImpl.class.getSimpleName());
 
     private final Vertx vertx;
     private final Class<E> TYPE;
 
     private static final String OBJECT_ETAG_MAP = "OBJECT_ETAG_MAP";
 
-    public InMemoryEtagManagerImpl(Class<E> TYPE) {
+    public InMemoryETagManagerImpl(Class<E> TYPE) {
         this(Vertx.currentContext().owner(), TYPE);
     }
 
-    public InMemoryEtagManagerImpl(Vertx vertx, Class<E> TYPE) {
+    public InMemoryETagManagerImpl(Vertx vertx, Class<E> TYPE) {
         this.vertx = vertx;
         this.TYPE = TYPE;
     }

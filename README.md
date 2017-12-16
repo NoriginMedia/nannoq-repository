@@ -60,22 +60,22 @@ dependencies {
 
 ### Implementation and Querying
 
-Please consult the [Wiki](https://github.com/mikand13/nannoq-repository/wiki) for guides on implementations and queries on the repositories.
+Please consult the [Wiki](https://github.com/NoriginMedia/nannoq-repository/wiki) for guides on implementations and queries on the repositories.
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](https://github.com/mikand13/nannoq-repository/blob/master/CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
+Please read [CONTRIBUTING.md](https://github.com/NoriginMedia/nannoq-repository/blob/master/CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/mikand13/nannoq-repository/tags)
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/NoriginMedia/nannoq-repository/tags)
 
 ## Authors
 
 * **Anders Mikkelsen** - *Initial work* - [Norigin Media](http://noriginmedia.com/)
 
-See also the list of [contributors](https://github.com/mikand13/nannoq-repository/contributors) who participated in this project.
+See also the list of [contributors](https://github.com/NoriginMedia/nannoq-repository/contributors) who participated in this project.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/mikand13/nannoq-repository/blob/master/LICENSE) file for details
+This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/NoriginMedia/nannoq-repository/blob/master/LICENSE) file for details

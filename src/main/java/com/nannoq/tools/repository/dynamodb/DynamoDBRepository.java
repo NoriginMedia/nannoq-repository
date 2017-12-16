@@ -45,11 +45,12 @@ import com.nannoq.tools.repository.repository.cache.CacheManager;
 import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
 import com.nannoq.tools.repository.repository.cache.LocalCacheManagerImpl;
 import com.nannoq.tools.repository.repository.etag.ETagManager;
-import com.nannoq.tools.repository.repository.etag.InMemoryEtagManagerImpl;
+import com.nannoq.tools.repository.repository.etag.InMemoryETagManagerImpl;
 import com.nannoq.tools.repository.repository.etag.RedisETagManagerImpl;
 import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import com.nannoq.tools.repository.repository.results.ItemListResult;
 import com.nannoq.tools.repository.repository.results.ItemResult;
+import com.nannoq.tools.repository.repository.results.UpdateResult;
 import com.nannoq.tools.repository.services.internal.InternalRepositoryService;
 import com.nannoq.tools.repository.utils.*;
 import io.vertx.core.*;
@@ -59,6 +60,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 import io.vertx.redis.RedisClient;
+import io.vertx.serviceproxy.ServiceException;
 import org.apache.commons.lang3.ArrayUtils;
 
 import javax.annotation.Nullable;
@@ -92,6 +94,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     protected Vertx vertx;
     private boolean isCached = false;
     private boolean isEtagEnabled = false;
+    private boolean isVersioned = false;
 
     private final Class<E> TYPE;
     private String HASH_IDENTIFIER;
@@ -195,7 +198,8 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
                 this.etagManager = new RedisETagManagerImpl<>(type, getRedisClient());
                 isEtagEnabled = true;
             } else {
-                this.etagManager = new InMemoryEtagManagerImpl<>(vertx, type);
+                this.etagManager = new InMemoryETagManagerImpl<>(vertx, type);
+                isEtagEnabled = true;
             }
         }
 
@@ -209,6 +213,10 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
             this.cacheManager = new LocalCacheManagerImpl<>(type, vertx);
             isCached = true;
         }
+
+        isVersioned = Arrays.stream(TYPE.getDeclaredMethods())
+                .anyMatch(m -> Arrays.stream(m.getDeclaredAnnotations())
+                        .anyMatch(a -> a instanceof DynamoDBVersionAttribute));
 
         setHashAndRange(type);
         Map<String, JsonObject> GSI_KEY_MAP = setGsiKeys(type);
@@ -891,8 +899,32 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     @Override
+    public void update(E record, Handler<AsyncResult<UpdateResult<E>>> asyncResultHandler) {
+        if (isVersioned) {
+            asyncResultHandler.handle(ServiceException.fail(
+                    400, "This model is versioned, use the updateLogic method!"));
+        } else {
+            update(record, asyncResultHandler);
+        }
+    }
+
+    @Override
+    public Future<UpdateResult<E>> update(E record) {
+        if (!isVersioned) {
+            throw new IllegalArgumentException("This model is versioned, use the updateLogic method!");
+        } else {
+            return update(record);
+        }
+    }
+
+    @Override
     public void read(JsonObject identifiers, Handler<AsyncResult<ItemResult<E>>> asyncResultHandler) {
         reader.read(identifiers, asyncResultHandler);
+    }
+
+    @Override
+    public void read(JsonObject identifiers, String[] projections, Handler<AsyncResult<ItemResult<E>>> asyncResultHandler) {
+        reader.read(identifiers, true, projections, asyncResultHandler);
     }
 
     @Override

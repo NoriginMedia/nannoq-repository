@@ -31,6 +31,7 @@ import com.nannoq.tools.repository.models.ModelUtils;
 import com.nannoq.tools.repository.repository.etag.ETagManager;
 import com.nannoq.tools.repository.repository.results.*;
 import com.nannoq.tools.repository.utils.FilterParameter;
+import com.nannoq.tools.repository.utils.ItemList;
 import com.nannoq.tools.repository.utils.OrderByParameter;
 import com.nannoq.tools.repository.utils.QueryPack;
 import io.vertx.core.AsyncResult;
@@ -47,11 +48,14 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.AbstractMap.SimpleEntry;
+import static java.util.stream.Collectors.toConcurrentMap;
 import static java.util.stream.Collectors.toList;
 
 /**
@@ -131,20 +135,40 @@ public interface Repository<E extends Model> {
         return createFuture;
     }
 
-    default void update(E record, Function<E, E> updateLogic, Handler<AsyncResult<UpdateResult<E>>> resultHandler) {
-        batchUpdate(Collections.singletonMap(record, updateLogic), res -> {
-            if (res.failed()) {
-                resultHandler.handle(Future.failedFuture(res.cause()));
-            } else {
-                Iterator<UpdateResult<E>> iterator = res.result().iterator();
+    default void update(E record, Handler<AsyncResult<UpdateResult<E>>> resultHandler) {
+        batchUpdate(Collections.singletonMap(record, r -> r), res -> doUpdate(resultHandler, res));
+    }
 
-                if (iterator.hasNext()) {
-                    resultHandler.handle(Future.succeededFuture(iterator.next()));
-                } else {
-                    resultHandler.handle(Future.failedFuture(new NullPointerException()));
-                }
+    default Future<UpdateResult<E>> update(E record) {
+        Future<UpdateResult<E>> updateFuture = Future.future();
+
+        update(record, r -> r, updateResult -> {
+            if (updateResult.failed()) {
+                updateFuture.fail(updateResult.cause());
+            } else {
+                updateFuture.complete(updateResult.result());
             }
         });
+
+        return updateFuture;
+    }
+
+    default void update(E record, Function<E, E> updateLogic, Handler<AsyncResult<UpdateResult<E>>> resultHandler) {
+        batchUpdate(Collections.singletonMap(record, updateLogic), res -> doUpdate(resultHandler, res));
+    }
+
+    default void doUpdate(Handler<AsyncResult<UpdateResult<E>>> resultHandler, AsyncResult<List<UpdateResult<E>>> res) {
+        if (res.failed()) {
+            resultHandler.handle(Future.failedFuture(res.cause()));
+        } else {
+            Iterator<UpdateResult<E>> iterator = res.result().iterator();
+
+            if (iterator.hasNext()) {
+                resultHandler.handle(Future.succeededFuture(iterator.next()));
+            } else {
+                resultHandler.handle(Future.failedFuture(new NullPointerException()));
+            }
+        }
     }
 
     default Future<UpdateResult<E>> update(E record, Function<E, E> updateLogic) {
@@ -161,6 +185,16 @@ public interface Repository<E extends Model> {
         return updateFuture;
     }
 
+    default void batchUpdate(List<E> records, Handler<AsyncResult<List<UpdateResult<E>>>> resultHandler) {
+        Function<E, E> update = rec -> rec;
+
+        final ConcurrentMap<E, Function<E, E>> collect = records.stream()
+                .map(r -> new SimpleImmutableEntry<>(r, update))
+                .collect(toConcurrentMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        batchUpdate(collect, resultHandler);
+    }
+
     default void batchUpdate(Map<E, Function<E, E>> records, Handler<AsyncResult<List<UpdateResult<E>>>> resultHandler) {
         doWrite(false, records, res -> {
             if (res.failed()) {
@@ -171,6 +205,14 @@ public interface Repository<E extends Model> {
                         .collect(toList())));
             }
         });
+    }
+
+    default Future<List<UpdateResult<E>>> batchUpdate(List<E> records) {
+        Future<List<UpdateResult<E>>> future = Future.future();
+
+        batchUpdate(records, future.completer());
+
+        return future;
     }
 
     default Future<List<UpdateResult<E>>> batchUpdate(Map<E, Function<E, E>> records) {
@@ -260,6 +302,8 @@ public interface Repository<E extends Model> {
 
     void read(JsonObject identifiers, Handler<AsyncResult<ItemResult<E>>> resultHandler);
 
+    void read(JsonObject identifiers, String[] projections, Handler<AsyncResult<ItemResult<E>>> resultHandler);
+
     default Future<ItemResult<E>> read(JsonObject identifiers) {
         Future<ItemResult<E>> readFuture = Future.future();
 
@@ -278,8 +322,19 @@ public interface Repository<E extends Model> {
         batchRead(new ArrayList<>(identifiers), resultHandler);
     }
 
+    default void batchRead(Set<JsonObject> identifiers, String[] projections,
+                           Handler<AsyncResult<List<ItemResult<E>>>> resultHandler) {
+        batchRead(new ArrayList<>(identifiers), resultHandler);
+    }
+
+    default void batchRead(List<JsonObject> identifiers,
+                           Handler<AsyncResult<List<ItemResult<E>>>> resultHandler) {
+        batchRead(new ArrayList<>(identifiers), null, resultHandler);
+    }
+
     @SuppressWarnings("SimplifyStreamApiCallChains")
-    default void batchRead(List<JsonObject> identifiers, Handler<AsyncResult<List<ItemResult<E>>>> resultHandler) {
+    default void batchRead(List<JsonObject> identifiers, String[] projections,
+                           Handler<AsyncResult<List<ItemResult<E>>>> resultHandler) {
         List<Future> futureList = new ArrayList<>();
         Queue<Future<ItemResult<E>>> queuedFutures = new ConcurrentLinkedQueue<>();
 
@@ -288,7 +343,11 @@ public interface Repository<E extends Model> {
             futureList.add(future);
             queuedFutures.add(future);
 
-            read(identifier, future.completer());
+            if (projections != null) {
+                read(identifier, projections, future.completer());
+            } else {
+                read(identifier, future.completer());
+            }
         });
 
         CompositeFuture.all(futureList).setHandler(res -> {
@@ -303,6 +362,18 @@ public interface Repository<E extends Model> {
                 resultHandler.handle(Future.succeededFuture(results));
             }
         });
+    }
+
+    default Future<List<ItemResult<E>>> batchRead(List<JsonObject> identifiers) {
+        return batchRead(identifiers, (String[]) null);
+    }
+
+    default Future<List<ItemResult<E>>> batchRead(List<JsonObject> identifiers, String[] projections) {
+        Future<List<ItemResult<E>>> future = Future.future();
+
+        batchRead(identifiers, projections, future.completer());
+
+        return future;
     }
 
     default void read(JsonObject identifiers, boolean consistent, Handler<AsyncResult<ItemResult<E>>> resultHandler) {
@@ -376,8 +447,7 @@ public interface Repository<E extends Model> {
     void readAll(JsonObject identifiers, Map<String, List<FilterParameter>> filterParameterMap,
                  Handler<AsyncResult<List<E>>> resultHandler);
 
-    default Future<List<E>> readAll(JsonObject identifiers,
-                                    Map<String, List<FilterParameter>> filterParamterMap) {
+    default Future<List<E>> readAll(JsonObject identifiers, Map<String, List<FilterParameter>> filterParamterMap) {
         Future<List<E>> readFuture = Future.future();
 
         readAll(identifiers, filterParamterMap, readAllResult -> {
