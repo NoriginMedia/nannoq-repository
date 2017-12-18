@@ -1010,6 +1010,10 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         reader.readAll(pageToken, queryPack, projections, asyncResultHandler);
     }
 
+    public void readAll(JsonObject identifiers, QueryPack queryPack, String GSI, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
+        reader.readAll(identifiers, queryPack.getPageToken(), queryPack, queryPack.getProjections(), GSI, asyncResultHandler);
+    }
+
     public void readAll(JsonObject identifiers, String pageToken, QueryPack queryPack, String[] projections, String GSI, Handler<AsyncResult<ItemListResult<E>>> asyncResultHandler) {
         reader.readAll(identifiers, pageToken, queryPack, projections, GSI, asyncResultHandler);
     }
@@ -1017,6 +1021,10 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     @Override
     public void aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections, Handler<AsyncResult<String>> resultHandler) {
         aggregation(identifiers, queryPack, projections, null, resultHandler);
+    }
+
+    public void aggregation(JsonObject identifiers, QueryPack queryPack, String GSI, Handler<AsyncResult<String>> resultHandler) {
+        aggregates.aggregation(identifiers, queryPack, queryPack.getProjections(), GSI, resultHandler);
     }
 
     public void aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections, String GSI, Handler<AsyncResult<String>> resultHandler) {

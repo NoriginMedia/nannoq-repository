@@ -508,6 +508,18 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
+    default void aggregation(JsonObject identifiers, QueryPack queryPack, Handler<AsyncResult<String>> resultHandler) {
+        aggregation(identifiers, queryPack, queryPack.getProjections(), resultHandler);
+    }
+
+    default Future<String> aggregation(JsonObject identifiers, QueryPack queryPack) {
+        Future<String> readFuture = Future.future();
+
+        aggregation(identifiers, queryPack, readFuture.completer());
+
+        return readFuture;
+    }
+
     void aggregation(JsonObject identifiers, QueryPack queryPack, String[] projections,
                      Handler<AsyncResult<String>> resultHandler);
 
