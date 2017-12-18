@@ -33,7 +33,6 @@ import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -59,7 +58,7 @@ public class AggregateFunction {
 
     public AggregateFunction() {
         this.validationError = new JsonObject();
-        this.groupBy = new ArrayList<>();
+        this.groupBy = new LinkedList<>();
     }
 
     public static AggregateFunctionBuilder builder() {
@@ -72,7 +71,7 @@ public class AggregateFunction {
 
         private AggregateFunctions function;
         private String field;
-        private List<GroupingConfiguration> groupBy = new ArrayList<>();
+        private List<GroupingConfiguration> groupBy = new LinkedList<>();
 
         private AggregateFunctionBuilder() {
         }
@@ -89,7 +88,7 @@ public class AggregateFunction {
             AggregateFunction func = new AggregateFunction();
             func.function = function;
             func.field = field;
-            func.groupBy = groupBy == null ? new ArrayList<>() : groupBy;
+            func.groupBy = groupBy == null ? new LinkedList<>() : groupBy;
 
             return func;
         }
