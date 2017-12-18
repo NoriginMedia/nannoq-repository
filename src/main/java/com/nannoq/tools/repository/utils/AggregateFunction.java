@@ -34,6 +34,7 @@ import io.vertx.core.logging.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
@@ -109,7 +110,25 @@ public class AggregateFunction {
 
         @Fluent
         public AggregateFunctionBuilder withGroupBy(@Nonnull List<GroupingConfiguration> groupBy) {
-            this.groupBy = groupBy;
+            if (groupBy.size() > 3) {
+                throw new IllegalArgumentException("You can only group 3 levels deep!");
+            }
+
+            if (this.groupBy == null) this.groupBy = new LinkedList<>();
+            this.groupBy.addAll(groupBy);
+
+            return this;
+        }
+
+        @Fluent
+        public AggregateFunctionBuilder addGroupBy(@Nonnull GroupingConfiguration groupBy) {
+            if (this.groupBy == null) this.groupBy = new LinkedList<>();
+
+            if (this.groupBy.size() == 3) {
+                throw new IllegalArgumentException("You can only group 3 levels deep!");
+            }
+
+            this.groupBy.add(groupBy);
 
             return this;
         }

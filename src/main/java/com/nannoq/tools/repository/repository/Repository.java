@@ -25,13 +25,11 @@
 
 package com.nannoq.tools.repository.repository;
 
-import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.models.ModelUtils;
 import com.nannoq.tools.repository.repository.etag.ETagManager;
 import com.nannoq.tools.repository.repository.results.*;
 import com.nannoq.tools.repository.utils.FilterParameter;
-import com.nannoq.tools.repository.utils.ItemList;
 import com.nannoq.tools.repository.utils.OrderByParameter;
 import com.nannoq.tools.repository.utils.QueryPack;
 import io.vertx.core.AsyncResult;
@@ -47,8 +45,8 @@ import io.vertx.serviceproxy.ServiceException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
@@ -461,6 +459,19 @@ public interface Repository<E extends Model> {
         return readFuture;
     }
 
+    default void readAll(JsonObject identifiers, QueryPack queryPack,
+                         Handler<AsyncResult<ItemListResult<E>>> resultHandler) {
+        readAll(identifiers, queryPack.getPageToken(), queryPack, queryPack.getProjections(), resultHandler);
+    }
+
+    default Future<ItemListResult<E>> readAll(JsonObject identifiers, QueryPack queryPack) {
+        Future<ItemListResult<E>> future = Future.future();
+
+        readAll(identifiers, queryPack.getPageToken(), queryPack, queryPack.getProjections(), future.completer());
+
+        return future;
+    }
+
     void readAll(JsonObject identifiers, String pageToken, QueryPack queryPack, String[] projections,
                  Handler<AsyncResult<ItemListResult<E>>> resultHandler);
 
@@ -685,4 +696,7 @@ public interface Repository<E extends Model> {
     }
 
     ETagManager getEtagManager();
+
+    boolean isCached();
+    boolean isEtagEnabled();
 }

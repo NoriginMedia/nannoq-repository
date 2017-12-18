@@ -28,7 +28,8 @@ package com.nannoq.tools.repository.dynamodb;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.handlers.AsyncHandler;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsyncClient;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsync;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBAsyncClientBuilder;
 import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
@@ -76,6 +77,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
+import static com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import static java.util.stream.Collectors.toList;
 
 /**
@@ -102,8 +104,11 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private String PAGINATION_IDENTIFIER;
 
     private boolean hasRangeKey;
-    private static AmazonDynamoDBAsyncClient DYNAMO_DB_CLIENT;
+    private static AmazonDynamoDBAsync DYNAMO_DB_CLIENT;
+
+    @SuppressWarnings("WeakerAccess")
     protected static DynamoDBMapper DYNAMO_DB_MAPPER;
+
     private RedisClient REDIS_CLIENT;
     private static String S3BucketName;
 
@@ -117,7 +122,10 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private final DynamoDBUpdater<E> updater;
     private final DynamoDBDeleter<E> deleter;
 
+    @SuppressWarnings("WeakerAccess")
     protected CacheManager<E> cacheManager;
+
+    @SuppressWarnings("WeakerAccess")
     protected ETagManager<E> etagManager;
 
     private Map<String, Field> fieldMap = new ConcurrentHashMap<>();
@@ -238,6 +246,16 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return vertx;
     }
 
+    @Override
+    public boolean isCached() {
+        return isCached;
+    }
+
+    @Override
+    public boolean isEtagEnabled() {
+        return isEtagEnabled;
+    }
+
     public static String getBucketName() {
         return S3BucketName;
     }
@@ -246,11 +264,16 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         String dynamoDBId = appConfig.getString("dynamo_db_iam_id");
         String dynamoDBKey = appConfig.getString("dynamo_db_iam_key");
         String endPoint = fetchEndPoint(appConfig);
+        String region = fetchRegion(appConfig);
 
-        BasicAWSCredentials creds = new BasicAWSCredentials(dynamoDBId, dynamoDBKey);
-        AWSStaticCredentialsProvider statCreds = new AWSStaticCredentialsProvider(creds);
+        if (dynamoDBId != null && dynamoDBKey != null) {
+            BasicAWSCredentials creds = new BasicAWSCredentials(dynamoDBId, dynamoDBKey);
+            AWSStaticCredentialsProvider statCreds = new AWSStaticCredentialsProvider(creds);
 
-        DYNAMO_DB_CLIENT = new AmazonDynamoDBAsyncClient(statCreds).withEndpoint(endPoint);
+            DYNAMO_DB_CLIENT = AmazonDynamoDBAsyncClientBuilder.standard()
+                    .withCredentials(statCreds)
+                    .withEndpointConfiguration(new EndpointConfiguration(endPoint, region))
+                    .build();
 
 //        SecretKey CONTENT_ENCRYPTION_KEY = new SecretKeySpec(
 //                DatatypeConverter.parseHexBinary(appConfig.getString("contentEncryptionKeyBase")), "PKCS5Padding");
@@ -260,10 +283,28 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 //
 //        EncryptionMaterialsProvider provider = new SymmetricStaticProvider(CONTENT_ENCRYPTION_KEY, SIGNING_KEY);
 
-        DYNAMO_DB_MAPPER = new DynamoDBMapper(
-                DYNAMO_DB_CLIENT, DynamoDBMapperConfig.DEFAULT,
-                //new AttributeEncryptor(provider), statCreds);
-                statCreds);
+            DYNAMO_DB_MAPPER = new DynamoDBMapper(
+                    DYNAMO_DB_CLIENT, DynamoDBMapperConfig.DEFAULT,
+                    //new AttributeEncryptor(provider), statCreds);
+                    statCreds);
+        } else {
+            DYNAMO_DB_CLIENT = AmazonDynamoDBAsyncClientBuilder.standard()
+                    .withEndpointConfiguration(new EndpointConfiguration(endPoint, region))
+                    .build();
+
+//        SecretKey CONTENT_ENCRYPTION_KEY = new SecretKeySpec(
+//                DatatypeConverter.parseHexBinary(appConfig.getString("contentEncryptionKeyBase")), "PKCS5Padding");
+//
+//        SecretKey SIGNING_KEY = new SecretKeySpec(
+//                DatatypeConverter.parseHexBinary(appConfig.getString("signingKeyBase")), "HmacSHA256");
+//
+//        EncryptionMaterialsProvider provider = new SymmetricStaticProvider(CONTENT_ENCRYPTION_KEY, SIGNING_KEY);
+
+            DYNAMO_DB_MAPPER = new DynamoDBMapper(
+                    DYNAMO_DB_CLIENT, DynamoDBMapperConfig.DEFAULT
+                    //new AttributeEncryptor(provider), statCreds);
+                    );
+        }
     }
 
     public static DynamoDBMapper getS3DynamoDbMapper() {
@@ -289,6 +330,21 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         }
 
         return endPoint;
+    }
+
+    private static String fetchRegion(JsonObject appConfig) {
+        JsonObject config = appConfig != null ? appConfig :
+                (Vertx.currentContext() == null ? null : Vertx.currentContext().config());
+        String region;
+
+        if (config == null) {
+            region = "eu-west-1";
+        } else {
+            region = config.getString("dynamo_signing_region");
+            if (region == null) region = "eu-west-1";
+        }
+
+        return region;
     }
 
     private void setHashAndRange(Class<E> type) {
@@ -612,6 +668,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return hasField || hasField(TYPE.getSuperclass(), key);
     }
 
+    @SuppressWarnings("SpellCheckingInspection")
     private boolean hasField(Class klazz, String key) {
         try {
             Field field = fieldMap.get(key);
@@ -630,6 +687,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         }
     }
 
+    @SuppressWarnings("unused")
     private static Type extractFieldType(Class type, String fieldName) {
         try {
             return type.getDeclaredField(fieldName).getType();
@@ -1104,7 +1162,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
                 S3BucketName = appConfig.getString("content_bucket");
 
-                SimpleModule s3LinkModule = new SimpleModule("MyModule", new Version(1, 0, 0, null));
+                SimpleModule s3LinkModule = new SimpleModule("MyModule", new Version(1, 0, 0, null, null, null));
                 s3LinkModule.addSerializer(new S3LinkSerializer());
                 s3LinkModule.addDeserializer(S3Link.class, new S3LinkDeserializer(appConfig));
 
@@ -1127,7 +1185,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         java.util.logging.Logger.getLogger("com.amazonaws").setLevel(java.util.logging.Level.WARNING);
     }
 
-    private static Future<Void> initialize(AmazonDynamoDBAsyncClient client, DynamoDBMapper mapper,
+    private static Future<Void> initialize(AmazonDynamoDBAsync client, DynamoDBMapper mapper,
                                               String COLLECTION, Class TYPE) {
         Future<Void> future = Future.future();
 
@@ -1136,7 +1194,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return future;
     }
 
-    private static void initialize(AmazonDynamoDBAsyncClient client, DynamoDBMapper mapper,
+    private static void initialize(AmazonDynamoDBAsync client, DynamoDBMapper mapper,
                                    String COLLECTION, Class TYPE,
                                    Handler<AsyncResult<Void>> resultHandler) {
         client.listTablesAsync(new AsyncHandler<ListTablesRequest, ListTablesResult>() {
@@ -1301,6 +1359,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return url.toString();
     }
 
+    @SuppressWarnings("UnusedReturnValue")
     protected String[] buildEventbusProjections(JsonArray projectionArray) {
         if (projectionArray == null) return new String[] {};
 

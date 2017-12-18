@@ -25,7 +25,6 @@
 
 package com.nannoq.tools.repository.utils;
 
-import com.nannoq.tools.repository.models.Model;
 import io.vertx.codegen.annotations.Fluent;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;

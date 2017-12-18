@@ -27,7 +27,6 @@ package com.nannoq.tools.repository.repository.etag;
 
 import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
-import com.nannoq.tools.repository.repository.cache.ClusterCacheManagerImpl;
 import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import com.nannoq.tools.repository.utils.ItemList;
 import io.vertx.core.AsyncResult;

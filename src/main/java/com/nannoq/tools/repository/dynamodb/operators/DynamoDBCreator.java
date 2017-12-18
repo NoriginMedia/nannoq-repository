@@ -39,7 +39,6 @@ import com.nannoq.tools.repository.models.ETagable;
 import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.repository.cache.CacheManager;
 import com.nannoq.tools.repository.repository.etag.ETagManager;
-import com.nannoq.tools.repository.repository.redis.RedisUtils;
 import io.vertx.core.*;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;

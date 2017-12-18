@@ -25,8 +25,6 @@
 
 package com.nannoq.tools.repository.utils;
 
-import com.nannoq.tools.repository.models.ETagable;
-import com.nannoq.tools.repository.models.Model;
 import com.nannoq.tools.repository.models.ModelUtils;
 import io.vertx.codegen.annotations.Fluent;
 import io.vertx.core.logging.Logger;
@@ -34,6 +32,7 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.ext.web.RoutingContext;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This class defines the querypack. A querypack includes the orderByQueue, the map of filterparameters to be performed,
@@ -154,7 +153,34 @@ public class QueryPack {
 
         @Fluent
         public QueryPackBuilder withFilterParameters(Map<String, List<FilterParameter>> params) {
-            this.params = params;
+            this.params = new LinkedHashMap<>();
+            this.params.putAll(params);
+
+            return this;
+        }
+
+        @Fluent
+        public QueryPackBuilder addFilterParameter(String field, FilterParameter param) {
+            if (this.params == null) this.params = new LinkedHashMap<>();
+            if (params.get(field) != null) {
+                params.get(field).add(param);
+            } else {
+                params.put(field, Collections.singletonList(param));
+            }
+
+            return this;
+        }
+
+        @Fluent
+        public QueryPackBuilder addFilterParameters(String field, List<FilterParameter> parameters) {
+            if (this.params == null) this.params = new LinkedHashMap<>();
+            if (params.get(field) != null) {
+                final List<FilterParameter> filterParameters = params.get(field);
+                filterParameters.addAll(parameters);
+                params.put(field, filterParameters);
+            } else {
+                params.put(field, parameters);
+            }
 
             return this;
         }

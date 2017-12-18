@@ -31,12 +31,9 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static com.nannoq.tools.repository.dynamodb.DynamoDBRepository.PAGINATION_INDEX;
-import static com.nannoq.tools.repository.utils.AggregateFunctions.COUNT;
 import static com.nannoq.tools.repository.utils.AggregateFunctions.MAX;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;

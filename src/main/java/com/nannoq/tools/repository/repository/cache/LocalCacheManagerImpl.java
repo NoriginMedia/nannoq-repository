@@ -41,15 +41,13 @@ import io.vertx.core.logging.LoggerFactory;
 import io.vertx.core.shareddata.LocalMap;
 import io.vertx.serviceproxy.ServiceException;
 
-import javax.cache.expiry.AccessedExpiryPolicy;
-import javax.cache.expiry.ExpiryPolicy;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static java.util.stream.Collectors.toList;
-import static javax.cache.expiry.Duration.FIVE_MINUTES;
 
 /**
  * The cachemanger contains the logic for setting, removing, and replace caches.
@@ -64,14 +62,9 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
     private final Class<E> TYPE;
 
     private static boolean cachesCreated = false;
-    private static Map<String, String> objectCache;
-    private static Map<String, String> itemListCache;
-    private static Map<String, String> aggregationCache;
 
     private final String ITEM_LIST_KEY_MAP;
     private final String AGGREGATION_KEY_MAP;
-
-    private ExpiryPolicy expiryPolicy = AccessedExpiryPolicy.factoryOf(FIVE_MINUTES).create();
 
     private final boolean hasTypeJsonField;
 
@@ -88,22 +81,15 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
     public void initializeCache(Handler<AsyncResult<Boolean>> resultHandler) {
         if (cachesCreated) return;
 
-        objectCache = createCache();
-        itemListCache = createCache();
-        aggregationCache = createCache();
         cachesCreated = true;
 
         resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
     }
 
-    private Map<String, String> createCache() {
-        return new ConcurrentHashMap<>();
-    }
-
     @Override
     public void checkObjectCache(String cacheId, Handler<AsyncResult<E>> resultHandler) {
         if (isObjectCacheAvailable()) {
-            final String content = objectCache.get(cacheId);
+            final String content = getObjectCache().get(cacheId);
 
             if (content == null) {
                 resultHandler.handle(ServiceException.fail(404, "Cache result is null!"));
@@ -126,7 +112,7 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
         }
 
         if (isItemListCacheAvailable()) {
-            final String content = itemListCache.get(cacheId);
+            final String content = getItemListCache().get(cacheId);
 
 
             if (content == null) {
@@ -173,7 +159,7 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
     @Override
     public void checkAggregationCache(String cacheKey, Handler<AsyncResult<String>> resultHandler) {
         if (isAggregationCacheAvailable()) {
-            final String content = aggregationCache.get(cacheKey);
+            final String content = getAggregationCache().get(cacheKey);
 
             if (content == null) {
                 resultHandler.handle(ServiceException.fail(404, "Cache result is null..."));
@@ -195,8 +181,8 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
             String fullCacheContent = Json.encode(item);
             String jsonRepresentationCache = item.toJsonFormat(projections).encode();
 
-            objectCache.put("FULL_CACHE_" + cacheId, fullCacheContent);
-            objectCache.put(cacheId, jsonRepresentationCache);
+            getObjectCache().put("FULL_CACHE_" + cacheId, fullCacheContent);
+            getObjectCache().put(cacheId, jsonRepresentationCache);
 
             future.complete(item);
         } else {
@@ -215,12 +201,12 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
                 String shortCacheId = shortCacheIdSupplier.apply(record);
                 String cacheId = cacheIdSupplier.apply(record);
 
-                objectCache.put(cacheId, record.toJsonString());
-                objectCache.put(shortCacheId, record.toJsonString());
+                getObjectCache().put(cacheId, record.toJsonString());
+                getObjectCache().put(shortCacheId, record.toJsonString());
 
                 String secondaryCache = "FULL_CACHE_" + cacheId;
-                objectCache.put(secondaryCache, Json.encode(record));
-                objectCache.put("FULL_CACHE_" + shortCacheId, Json.encode(record));
+                getObjectCache().put(secondaryCache, Json.encode(record));
+                getObjectCache().put("FULL_CACHE_" + shortCacheId, Json.encode(record));
             });
 
             purgeSecondaryCaches(writeFuture.completer());
@@ -237,7 +223,7 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
         if (isItemListCacheAvailable()) {
             String cacheId = cacheIdSupplier.get();
 
-            itemListCache.put(cacheId, content);
+            getItemListCache().put(cacheId, content);
             replaceMapValues(ITEM_LIST_KEY_MAP, cacheId);
 
             resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
@@ -254,7 +240,7 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
         if (isAggregationCacheAvailable()) {
             String cacheKey = cacheIdSupplier.get();
 
-            aggregationCache.put(cacheKey, content);
+            getAggregationCache().put(cacheKey, content);
             replaceMapValues(AGGREGATION_KEY_MAP, cacheKey);
 
             resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
@@ -287,8 +273,8 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
                 String cacheId = cacheIdSupplier.apply(record);
                 String secondaryCache = "FULL_CACHE_" + cacheId;
 
-                objectCache.remove(cacheId);
-                objectCache.remove(secondaryCache);
+                getObjectCache().remove(cacheId);
+                getObjectCache().remove(secondaryCache);
             });
 
             purgeSecondaryCaches(future.completer());
@@ -301,13 +287,13 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
 
     private void purgeSecondaryCaches(Handler<AsyncResult<Boolean>> resultHandler) {
         if (isItemListCacheAvailable()) {
-            purgeMap(ITEM_LIST_KEY_MAP, itemListCache);
+            purgeMap(ITEM_LIST_KEY_MAP, getItemListCache());
         } else {
             logger.error("ItemListCache is null, recreating...");
         }
 
         if (isAggregationCacheAvailable()) {
-            purgeMap(AGGREGATION_KEY_MAP, aggregationCache);
+            purgeMap(AGGREGATION_KEY_MAP, getAggregationCache());
         } else {
             logger.error("AggregateCache is null, recreating...");
         }
@@ -346,27 +332,24 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void recreateObjectCache() {
-        objectCache = createCache();
+    private LocalMap<String, String> getObjectCache() {
+        return vertx.sharedData().getLocalMap("objectCache");
     }
 
-    @SuppressWarnings("unchecked")
-    private void recreateItemListCache() {
-        itemListCache = createCache();
+    private LocalMap<String, String> getItemListCache() {
+        return vertx.sharedData().getLocalMap("itemListCache");
     }
 
-    @SuppressWarnings("unchecked")
-    private void recreateAggregateCache() {
-        aggregationCache = createCache();
+    private LocalMap<String, String> getAggregationCache() {
+        return vertx.sharedData().getLocalMap("aggregationCache");
     }
 
     @Override
     public Boolean isObjectCacheAvailable() {
-        boolean available = objectCache != null;
+        boolean available = getObjectCache() != null;
 
         if (!available) {
-            recreateObjectCache();
+            getObjectCache();
         }
 
         return available;
@@ -374,10 +357,10 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
 
     @Override
     public Boolean isItemListCacheAvailable() {
-        boolean available = itemListCache != null;
+        boolean available = getItemListCache() != null;
 
         if (!available) {
-            recreateItemListCache();
+            getItemListCache();
         }
 
         return available;
@@ -385,10 +368,10 @@ public class LocalCacheManagerImpl<E extends Model & Cacheable> implements Cache
 
     @Override
     public Boolean isAggregationCacheAvailable() {
-        boolean available = aggregationCache != null;
+        boolean available = getAggregationCache() != null;
 
         if (!available) {
-            recreateAggregateCache();
+            getAggregationCache();
         }
 
         return available;
