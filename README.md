@@ -46,7 +46,7 @@ First install with either Maven:
 <dependency>
     <groupId>com.nannoq</groupId>
     <artifactId>repository</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
@@ -54,7 +54,7 @@ or Gradle:
 
 ```groovy
 dependencies {
-    compile group: 'nannoq.com:repository:1.0.0'
+    compile group: 'nannoq.com:repository:1.0.1'
 }
 ```
 
