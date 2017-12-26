@@ -170,7 +170,13 @@ public class DynamoDBRepositoryTestIT {
                 }
             }
 
-            async.complete();
+            logger.info("Sleep for DynamoDBLocal table creation...");
+
+            vertx.setTimer(2000L, aLong -> {
+                logger.info("Ready!");
+
+                async.complete();
+            });
         });
     }
 
