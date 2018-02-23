@@ -1025,8 +1025,8 @@ public class DynamoDBRepositoryTestIT {
 
             Date testDate = new Date();
             final TestModel result = createRes.result();
-            result.setSomeDateTwo(testDate);
-            service.remoteUpdate(result, updateRes -> {
+
+            service.remoteUpdate(result, r -> result.setSomeDateTwo(testDate), updateRes -> {
                 testContext.assertTrue(updateRes.succeeded());
                 testContext.assertEquals(updateRes.result().getSomeDateTwo(), testDate);
 

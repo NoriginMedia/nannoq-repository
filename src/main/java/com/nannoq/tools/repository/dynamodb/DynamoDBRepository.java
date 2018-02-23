@@ -1117,8 +1117,8 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
 
     @SuppressWarnings("unchecked")
     @Override
-    public InternalRepositoryService<E> remoteUpdate(E record, Handler<AsyncResult<E>> asyncResultHandler) {
-        update(record, r -> (E) record.setModifiables(r), res -> {
+    public InternalRepositoryService<E> remoteUpdate(E record, final Function<E, E> updateLogic, Handler<AsyncResult<E>> asyncResultHandler) {
+        update(record, updateLogic, res -> {
             if (res.failed()) {
                 asyncResultHandler.handle(Future.failedFuture(res.cause()));
             } else {
