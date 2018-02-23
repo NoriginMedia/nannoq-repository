@@ -33,7 +33,6 @@ import io.vertx.core.Handler;
 import io.vertx.core.json.JsonObject;
 
 import java.util.List;
-import java.util.function.Function;
 
 /**
  * This interface declares a contract for the internal facing repository services.
@@ -54,7 +53,7 @@ public interface InternalRepositoryService<T> {
     InternalRepositoryService<T> remoteIndex(JsonObject identifier, Handler<AsyncResult<List<T>>> resultHandler);
 
     @Fluent
-    InternalRepositoryService<T> remoteUpdate(T record, Function<T, T> updateLogic, Handler<AsyncResult<T>> resultHandler);
+    InternalRepositoryService<T> remoteUpdate(T record, Handler<AsyncResult<T>> resultHandler);
 
     @Fluent
     InternalRepositoryService<T> remoteDelete(JsonObject identifiers, Handler<AsyncResult<T>> resultHandler);
