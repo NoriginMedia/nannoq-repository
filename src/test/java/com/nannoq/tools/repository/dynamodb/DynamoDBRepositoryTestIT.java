@@ -270,7 +270,7 @@ public class DynamoDBRepositoryTestIT {
 
     @Test
     public void getBucketName() {
-        assertEquals("BucketName does not match Config!", config.getString("content_bucket"), DynamoDBRepository.getBucketName());
+        assertEquals("BucketName does not match Config!", config.getString("content_bucket"), repo.getBucketName());
     }
 
     @Test
@@ -1066,7 +1066,7 @@ public class DynamoDBRepositoryTestIT {
 
     @Test
     public void createS3Link() {
-        final S3Link test = DynamoDBRepository.createS3Link(repo.getDynamoDbMapper(), "/someBogusPath");
+        final S3Link test = DynamoDBRepository.createS3Link(repo.getDynamoDbMapper(), "someName", "/someBogusPath");
 
         assertNotNull(test);
         assertEquals("Path is not equal!", "/someBogusPath", test.getKey());
@@ -1074,7 +1074,7 @@ public class DynamoDBRepositoryTestIT {
 
     @Test
     public void createSignedUrl() {
-        final S3Link test = DynamoDBRepository.createS3Link(repo.getDynamoDbMapper(), "/someBogusPath");
+        final S3Link test = DynamoDBRepository.createS3Link(repo.getDynamoDbMapper(), "someName", "/someBogusPath");
         String signedUrl = DynamoDBRepository.createSignedUrl(repo.getDynamoDbMapper(), test);
 
         assertNotNull("Url is null!", signedUrl);
@@ -1084,7 +1084,7 @@ public class DynamoDBRepositoryTestIT {
 
     @Test
     public void createSignedUrlWithDays() {
-        final S3Link test = DynamoDBRepository.createS3Link(repo.getDynamoDbMapper(), "/someBogusPath");
+        final S3Link test = DynamoDBRepository.createS3Link(repo.getDynamoDbMapper(), "someName", "/someBogusPath");
         String signedUrl = DynamoDBRepository.createSignedUrl(repo.getDynamoDbMapper(), 7, test);
 
         assertNotNull("Url is null!", signedUrl);

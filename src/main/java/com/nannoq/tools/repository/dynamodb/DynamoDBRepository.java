@@ -104,15 +104,12 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     private String PAGINATION_IDENTIFIER;
 
     private boolean hasRangeKey;
-    private static AmazonDynamoDBAsync DYNAMO_DB_CLIENT;
 
     @SuppressWarnings("WeakerAccess")
-    protected static DynamoDBMapper DYNAMO_DB_MAPPER;
+    protected DynamoDBMapper DYNAMO_DB_MAPPER;
 
     private RedisClient REDIS_CLIENT;
-    private static String S3BucketName;
-
-    private static final Object SYNC_MAPPER_OBJECT = new Object();
+    private String S3BucketName;
 
     private final DynamoDBParameters<E> parameters;
     private final DynamoDBAggregates<E> aggregates;
@@ -172,9 +169,9 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
             throw new DynamoDBMappingException("This type is a document definition, should not have own repository!");
         }
 
-        synchronized (SYNC_MAPPER_OBJECT) {
-            if (DYNAMO_DB_MAPPER == null) setMapper(appConfig);
-        }
+        S3BucketName = appConfig.getString("content_bucket");
+
+        setMapper(appConfig);
 
         Optional<String> tableName = Arrays.stream(TYPE.getDeclaredAnnotations())
                 .filter(a -> a instanceof DynamoDBTable)
@@ -256,11 +253,11 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         return isEtagEnabled;
     }
 
-    public static String getBucketName() {
+    public String getBucketName() {
         return S3BucketName;
     }
 
-    private static void setMapper(JsonObject appConfig) {
+    private void setMapper(JsonObject appConfig) {
         String dynamoDBId = appConfig.getString("dynamo_db_iam_id");
         String dynamoDBKey = appConfig.getString("dynamo_db_iam_key");
         String endPoint = fetchEndPoint(appConfig);
@@ -270,52 +267,39 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
             BasicAWSCredentials creds = new BasicAWSCredentials(dynamoDBId, dynamoDBKey);
             AWSStaticCredentialsProvider statCreds = new AWSStaticCredentialsProvider(creds);
 
-            DYNAMO_DB_CLIENT = AmazonDynamoDBAsyncClientBuilder.standard()
+            DYNAMO_DB_MAPPER = new DynamoDBMapper(AmazonDynamoDBAsyncClientBuilder.standard()
                     .withCredentials(statCreds)
                     .withEndpointConfiguration(new EndpointConfiguration(endPoint, region))
-                    .build();
-
-//        SecretKey CONTENT_ENCRYPTION_KEY = new SecretKeySpec(
-//                DatatypeConverter.parseHexBinary(appConfig.getString("contentEncryptionKeyBase")), "PKCS5Padding");
-//
-//        SecretKey SIGNING_KEY = new SecretKeySpec(
-//                DatatypeConverter.parseHexBinary(appConfig.getString("signingKeyBase")), "HmacSHA256");
-//
-//        EncryptionMaterialsProvider provider = new SymmetricStaticProvider(CONTENT_ENCRYPTION_KEY, SIGNING_KEY);
-
-            DYNAMO_DB_MAPPER = new DynamoDBMapper(
-                    DYNAMO_DB_CLIENT, DynamoDBMapperConfig.DEFAULT,
-                    //new AttributeEncryptor(provider), statCreds);
-                    statCreds);
+                    .build(), DynamoDBMapperConfig.DEFAULT, statCreds);
         } else {
-            DYNAMO_DB_CLIENT = AmazonDynamoDBAsyncClientBuilder.standard()
+            DYNAMO_DB_MAPPER = new DynamoDBMapper(AmazonDynamoDBAsyncClientBuilder.standard()
                     .withEndpointConfiguration(new EndpointConfiguration(endPoint, region))
-                    .build();
-
-//        SecretKey CONTENT_ENCRYPTION_KEY = new SecretKeySpec(
-//                DatatypeConverter.parseHexBinary(appConfig.getString("contentEncryptionKeyBase")), "PKCS5Padding");
-//
-//        SecretKey SIGNING_KEY = new SecretKeySpec(
-//                DatatypeConverter.parseHexBinary(appConfig.getString("signingKeyBase")), "HmacSHA256");
-//
-//        EncryptionMaterialsProvider provider = new SymmetricStaticProvider(CONTENT_ENCRYPTION_KEY, SIGNING_KEY);
-
-            DYNAMO_DB_MAPPER = new DynamoDBMapper(
-                    DYNAMO_DB_CLIENT, DynamoDBMapperConfig.DEFAULT
-                    //new AttributeEncryptor(provider), statCreds);
-                    );
+                    .build(), DynamoDBMapperConfig.DEFAULT);
         }
     }
 
     public static DynamoDBMapper getS3DynamoDbMapper() {
-        synchronized (SYNC_MAPPER_OBJECT) {
-            if (DYNAMO_DB_MAPPER == null) {
-                setMapper(Objects.requireNonNull(Vertx.currentContext() == null ?
-                        null : Vertx.currentContext().config()));
-            }
+        JsonObject config = Objects.requireNonNull(
+                Vertx.currentContext() == null ? null : Vertx.currentContext().config());
+
+        String dynamoDBId = config.getString("dynamo_db_iam_id");
+        String dynamoDBKey = config.getString("dynamo_db_iam_key");
+        String endPoint = fetchEndPoint(config);
+        String region = fetchRegion(config);
+
+        if (dynamoDBId == null || dynamoDBKey == null) {
+            throw new IllegalArgumentException("Must supply keys for S3!");
         }
 
-        return DYNAMO_DB_MAPPER;
+        BasicAWSCredentials creds = new BasicAWSCredentials(dynamoDBId, dynamoDBKey);
+        AWSStaticCredentialsProvider statCreds = new AWSStaticCredentialsProvider(creds);;
+
+        return new DynamoDBMapper(AmazonDynamoDBAsyncClientBuilder.standard()
+                .withCredentials(statCreds)
+                .withEndpointConfiguration(new EndpointConfiguration(endPoint, region))
+                .build(),
+                DynamoDBMapperConfig.DEFAULT,
+                statCreds);
     }
 
     private static String fetchEndPoint(JsonObject appConfig) {
@@ -1159,16 +1143,13 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         if (logger.isDebugEnabled()) { logger.debug("Initializing DynamoDB"); }
 
         try {
-            setMapper(appConfig);
             silenceDynamoDBLoggers();
             List<Future> futures = new ArrayList<>();
 
-            collectionMap.forEach((k, v) -> futures.add(initialize(DYNAMO_DB_CLIENT, DYNAMO_DB_MAPPER, k, v)));
+            collectionMap.forEach((k, v) -> futures.add(initialize(appConfig, k, v)));
 
             CompositeFuture.all(futures).setHandler(res -> {
                 if (logger.isDebugEnabled()) { logger.debug("Preparing S3 Bucket"); }
-
-                S3BucketName = appConfig.getString("content_bucket");
 
                 SimpleModule s3LinkModule = new SimpleModule("MyModule", new Version(1, 0, 0, null, null, null));
                 s3LinkModule.addSerializer(new S3LinkSerializer());
@@ -1193,11 +1174,37 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         java.util.logging.Logger.getLogger("com.amazonaws").setLevel(java.util.logging.Level.WARNING);
     }
 
-    private static Future<Void> initialize(AmazonDynamoDBAsync client, DynamoDBMapper mapper,
-                                              String COLLECTION, Class TYPE) {
+    private static Future<Void> initialize(final JsonObject appConfig, String COLLECTION, Class TYPE) {
         Future<Void> future = Future.future();
 
-        initialize(client, mapper, COLLECTION, TYPE, future.completer());
+        String dynamoDBId = appConfig.getString("dynamo_db_iam_id");
+        String dynamoDBKey = appConfig.getString("dynamo_db_iam_key");
+        String endPoint = fetchEndPoint(appConfig);
+        String region = fetchRegion(appConfig);
+
+        AmazonDynamoDBAsyncClientBuilder amazonDynamoDBAsyncClientBuilder = AmazonDynamoDBAsyncClientBuilder.standard()
+                .withEndpointConfiguration(new EndpointConfiguration(endPoint, region));
+        AmazonDynamoDBAsync amazonDynamoDBAsync;
+        DynamoDBMapper dynamoDBMapper;
+
+        if (dynamoDBId == null || dynamoDBKey == null) {
+            logger.warn("S3 Creds unavailable for initialize");
+
+
+            amazonDynamoDBAsync = amazonDynamoDBAsyncClientBuilder
+                    .build();
+            dynamoDBMapper = new DynamoDBMapper(amazonDynamoDBAsync, DynamoDBMapperConfig.DEFAULT);
+        } else {
+            BasicAWSCredentials creds = new BasicAWSCredentials(dynamoDBId, dynamoDBKey);
+            AWSStaticCredentialsProvider statCreds = new AWSStaticCredentialsProvider(creds);
+
+            amazonDynamoDBAsync = amazonDynamoDBAsyncClientBuilder
+                    .withCredentials(statCreds)
+                    .build();
+            dynamoDBMapper = new DynamoDBMapper(amazonDynamoDBAsync, DynamoDBMapperConfig.DEFAULT, statCreds);
+        }
+
+        initialize(amazonDynamoDBAsync, dynamoDBMapper, COLLECTION, TYPE, future.completer());
 
         return future;
     }
@@ -1345,7 +1352,7 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
         });
     }
 
-    public static S3Link createS3Link(DynamoDBMapper dynamoDBMapper, String path) {
+    public static S3Link createS3Link(DynamoDBMapper dynamoDBMapper, String S3BucketName, String path) {
         return dynamoDBMapper.createS3Link(Region.EU_Ireland, S3BucketName, path);
     }
 
