@@ -56,12 +56,12 @@ public interface CachedContent {
     S3Link getContentLocation();
     void setContentLocation(S3Link s3Link);
 
-    default void storeContent(Vertx vertx, String urlToContent, String bucketPath,
+    default void storeContent(Vertx vertx, String urlToContent, String bucketName, String bucketPath,
                               Handler<AsyncResult<Boolean>> resultHandler) {
-        storeContent(vertx, 0, urlToContent, bucketPath, resultHandler);
+        storeContent(vertx, 0, urlToContent, bucketName, bucketPath, resultHandler);
     }
 
-    default void storeContent(Vertx vertx, int attempt, String urlToContent, String bucketPath,
+    default void storeContent(Vertx vertx, int attempt, String urlToContent, String bucketName, String bucketPath,
                               Handler<AsyncResult<Boolean>> resultHandler) {
         long startTime = System.currentTimeMillis();
 
@@ -70,14 +70,15 @@ public interface CachedContent {
                 .setMaxRedirects(100);
         final HttpClient httpClient = vertx.createHttpClient(opts);
 
-        doRequest(vertx, httpClient, attempt, urlToContent, bucketPath, result -> {
+        doRequest(vertx, httpClient, attempt, urlToContent, bucketName, bucketPath, result -> {
             if (result.failed()) {
                 if (System.currentTimeMillis() < startTime + (60000L * 15L)) {
                     if (attempt < 30) {
-                        logger.warn("Failed on: " + urlToContent + " at attempt " + attempt + " ::: " + result.cause().getMessage());
+                        logger.warn("Failed on: " + urlToContent + " at attempt " + attempt + " ::: " +
+                                result.cause().getMessage());
 
                         vertx.setTimer((attempt == 0 ? 1 : attempt) * 1000L, aLong ->
-                                storeContent(vertx, attempt + 1, urlToContent, bucketPath, resultHandler));
+                                storeContent(vertx, attempt + 1, urlToContent, bucketName, bucketPath, resultHandler));
                     } else {
                         logger.error("Complete failure on: " + urlToContent + " after " + attempt + " attempts!");
 
@@ -103,10 +104,10 @@ public interface CachedContent {
         });
     }
 
-    default void doRequest(Vertx vertx, HttpClient httpClient, int attempt, String urlToContent, String bucketPath,
-                           Handler<AsyncResult<Boolean>> resultHandler) {
+    default void doRequest(Vertx vertx, HttpClient httpClient, int attempt, String urlToContent, String bucketName,
+                           String bucketPath, Handler<AsyncResult<Boolean>> resultHandler) {
         DynamoDBMapper dynamoDBMapper = DynamoDBRepository.getS3DynamoDbMapper();
-        setContentLocation(DynamoDBRepository.createS3Link(dynamoDBMapper, bucketPath));
+        setContentLocation(DynamoDBRepository.createS3Link(dynamoDBMapper, bucketName, bucketPath));
         final boolean[] finished = {false};
 
         try {
