@@ -1028,7 +1028,7 @@ public class DynamoDBRepositoryTestIT {
 
             service.remoteUpdate(result, updateRes -> {
                 testContext.assertTrue(updateRes.succeeded());
-                testContext.assertEquals(updateRes.result().getSomeDateTwo(), testDate);
+                testContext.assertEquals(updateRes.result().getSomeDateTwo().toString(), testDate.toString());
 
                 async.complete();
             });

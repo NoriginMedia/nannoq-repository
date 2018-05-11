@@ -279,9 +279,11 @@ public class DynamoDBRepository<E extends DynamoDBModel & Model & ETagable & Cac
     }
 
     public static DynamoDBMapper getS3DynamoDbMapper() {
-        JsonObject config = Objects.requireNonNull(
-                Vertx.currentContext() == null ? null : Vertx.currentContext().config());
+        return getS3DynamoDbMapper(Objects.requireNonNull(
+                Vertx.currentContext() == null ? null : Vertx.currentContext().config()));
+    }
 
+    public static DynamoDBMapper getS3DynamoDbMapper(JsonObject config) {
         String dynamoDBId = config.getString("dynamo_db_iam_id");
         String dynamoDBKey = config.getString("dynamo_db_iam_key");
         String endPoint = fetchEndPoint(config);

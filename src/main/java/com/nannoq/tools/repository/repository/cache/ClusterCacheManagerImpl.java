@@ -81,7 +81,8 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
     private final String ITEM_LIST_KEY_MAP;
     private final String AGGREGATION_KEY_MAP;
 
-    private final long CACHE_TIMEOUT_VALUE = 1000L;
+    private final long CACHE_READ_TIMEOUT_VALUE = 500L;
+    private final long CACHE_WRITE_TIMEOUT_VALUE = 10000L;
     private ExpiryPolicy expiryPolicy = AccessedExpiryPolicy.factoryOf(FIVE_MINUTES).create();
 
     private final boolean hasTypeJsonField;
@@ -166,7 +167,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             AtomicBoolean completeOrTimeout = new AtomicBoolean();
             completeOrTimeout.set(false);
 
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+            vertx.setTimer(CACHE_READ_TIMEOUT_VALUE, aLong -> {
                 if (!completeOrTimeout.getAndSet(true)) {
                     resultHandler.handle(ServiceException.fail(502, "Cache timeout!"));
                 }
@@ -226,7 +227,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             AtomicBoolean completeOrTimeout = new AtomicBoolean();
             completeOrTimeout.set(false);
 
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+            vertx.setTimer(CACHE_READ_TIMEOUT_VALUE, aLong -> {
                 if (!completeOrTimeout.getAndSet(true)) {
                     resultHandler.handle(ServiceException.fail(502, "Cache timeout!"));
                 }
@@ -297,7 +298,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             AtomicBoolean completeOrTimeout = new AtomicBoolean();
             completeOrTimeout.set(false);
 
-            vertx.setTimer(10000L, aLong -> {
+            vertx.setTimer(CACHE_READ_TIMEOUT_VALUE, aLong -> {
                 if (!completeOrTimeout.getAndSet(true)) {
                     resultHandler.handle(
                             ServiceException.fail(502, "Cache timeout!"));
@@ -345,7 +346,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             Future<Boolean> fullCacheFuture = Future.future();
             Future<Boolean> jsonFuture = Future.future();
 
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(fut -> {
+            vertx.setTimer(CACHE_WRITE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(fut -> {
                 if (!fullCacheFuture.isComplete()) {
                     objectCache.removeAsync("FULL_CACHE_" + cacheId);
                     fullCacheFuture.tryComplete();
@@ -489,7 +490,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
     }
 
     private void replaceTimeoutHandler(String cacheId, Future<Boolean> replaceFirst) {
-        vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+        vertx.setTimer(CACHE_WRITE_TIMEOUT_VALUE, aLong -> {
             try {
                 vertx.executeBlocking(future -> {
                     if (!replaceFirst.isComplete() && !objectCache.isDestroyed()) {
@@ -497,7 +498,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
                         replaceFirst.tryComplete(Boolean.TRUE);
 
-                        logger.error("Cache timeout!");
+                        logger.error("Cache timeout when replacing" + cacheId + "!");
                     }
 
                     future.complete();
@@ -513,13 +514,14 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             String cacheId = cacheIdSupplier.get();
             Future<Boolean> cacheFuture = Future.future();
 
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(fut -> {
+            vertx.setTimer(CACHE_WRITE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(fut -> {
                 if (!cacheFuture.isComplete()) {
                     itemListCache.removeAsync(cacheId);
 
-                    cacheFuture.tryFail(new TimeoutException("Cache request timed out, above: " + CACHE_TIMEOUT_VALUE + "!"));
+                    cacheFuture.tryFail(new TimeoutException(
+                            "Cache request timed out, above: " + CACHE_WRITE_TIMEOUT_VALUE + "!"));
 
-                    logger.error("Cache timeout!");
+                    logger.error("Cache timeout when replacing itemlistcache for: " + cacheId + "!");
                 }
 
                 fut.complete();
@@ -546,7 +548,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
             cacheFuture.setHandler(res -> {
                 if (res.failed()) {
-                    resultHandler.handle(ServiceException.fail(504, "Cache timed out!"));
+                    resultHandler.handle(ServiceException.fail(504, res.cause().getMessage()));
                 } else {
                     resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
                 }
@@ -565,20 +567,19 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             String cacheKey = cacheIdSupplier.get();
 
             Future<Boolean> cacheIdFuture = Future.future();
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
+            vertx.setTimer(CACHE_WRITE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(future -> {
                 if (!cacheIdFuture.isComplete()) {
                     aggregationCache.removeAsync(cacheKey);
 
                     cacheIdFuture.tryComplete();
 
-                    logger.error("Cache timeout!");
+                    logger.error("Cache timeout when replacing aggregationcache for: " + cacheKey + "!");
                 }
 
                 future.complete();
             }, false, res -> logger.trace("Result of timeout cache clear is: " + res.succeeded())));
 
             aggregationCache.putAsync(cacheKey, content, expiryPolicy).andThen(new ExecutionCallback<Void>() {
-
                 public void onResponse(Void b) {
                     if (logger.isDebugEnabled()) {
                         logger.debug("Set cache for " + cacheKey + " is " + b);
@@ -586,7 +587,6 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
                     replaceMapValues(cacheIdFuture, AGGREGATION_KEY_MAP, cacheKey);
                 }
-
 
                 public void onFailure(Throwable throwable) {
                     logger.error(throwable);
@@ -597,7 +597,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
             cacheIdFuture.setHandler(complete -> {
                 if (complete.failed()) {
-                    resultHandler.handle(ServiceException.fail(500, "Timeout on cache!"));
+                    resultHandler.handle(ServiceException.fail(500, complete.cause().getMessage()));
                 } else {
                     resultHandler.handle(Future.succeededFuture(Boolean.TRUE));
                 }
@@ -684,13 +684,13 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
                 String secondaryCache = "FULL_CACHE_" + cacheId;
                 Future<Boolean> purgeSecond = Future.future();
-                vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(fut -> {
+                vertx.setTimer(CACHE_WRITE_TIMEOUT_VALUE, aLong -> vertx.executeBlocking(fut -> {
                     if (!purgeFirst.isComplete()) {
                         objectCache.removeAsync(cacheId);
 
                         purgeFirst.tryComplete();
 
-                        logger.error("Cache timeout!");
+                        logger.error("Cache timeout purging cache for: " + cacheId + "!");
                     }
 
                     if (!purgeSecond.isComplete()) {
@@ -698,7 +698,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
                         purgeSecond.tryComplete();
 
-                        logger.error("Cache timeout!");
+                        logger.error("Cache timeout purging full cache for: " + secondaryCache + "!");
                     }
 
                     fut.complete();
@@ -747,7 +747,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
         Future<Boolean> aggregationFuture = Future.future();
 
         if (isItemListCacheAvailable()) {
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+            vertx.setTimer(CACHE_WRITE_TIMEOUT_VALUE, aLong -> {
                 try {
                     vertx.executeBlocking(future -> {
                         if (!itemListFuture.isComplete() && !itemListCache.isDestroyed()) {
@@ -755,7 +755,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
                             itemListFuture.tryComplete();
 
-                            logger.error("Cache Timeout!");
+                            logger.error("Cache Timeout purging secondary caches for itemlist!");
                         }
 
                         future.complete();
@@ -764,9 +764,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             });
 
             purgeMap(ITEM_LIST_KEY_MAP, itemListCache, res -> {
-                if (res.failed()) {
-                    itemListCache = null;
-                }
+                if (res.failed()) itemListCache = null;
 
                 itemListFuture.tryComplete();
             });
@@ -777,7 +775,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
         }
 
         if (isAggregationCacheAvailable()) {
-            vertx.setTimer(CACHE_TIMEOUT_VALUE, aLong -> {
+            vertx.setTimer(CACHE_WRITE_TIMEOUT_VALUE, aLong -> {
                 try {
                     vertx.executeBlocking(future -> {
                         if (!aggregationFuture.isComplete() && !aggregationCache.isDestroyed()) {
@@ -785,7 +783,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
 
                             aggregationFuture.tryComplete();
 
-                            logger.error("Cache timeout!");
+                            logger.error("Cache timeout purging aggregationcache!");
                         }
 
                         future.complete();
@@ -794,9 +792,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
             });
 
             purgeMap(AGGREGATION_KEY_MAP, aggregationCache, res -> {
-                if (res.failed()) {
-                    aggregationCache = null;
-                }
+                if (res.failed()) aggregationCache = null;
 
                 aggregationFuture.tryComplete();
             });
@@ -813,9 +809,7 @@ public class ClusterCacheManagerImpl<E extends Cacheable & Model> implements Cac
     private void purgeMap(String MAP_KEY, final ICache<String, String> cache,
                           Handler<AsyncResult<Boolean>> resultHandler) {
         vertx.<Boolean>executeBlocking(purgeAllListCaches -> {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Now purging cache");
-            }
+            if (logger.isDebugEnabled()) logger.debug("Now purging cache: " + MAP_KEY);
 
             try {
                 vertx.sharedData().<String, Set<String>>getClusterWideMap(MAP_KEY, map -> {
